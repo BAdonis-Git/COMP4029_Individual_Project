@@ -9,7 +9,7 @@
 | Document | Last Updated | Link |
 | -------- | ------------ | ---- |
 | Meeting Log | 10/10/24 | [live](https://docs.google.com/document/d/187BxtVY5Kx13VdZEeFRouwpyampU16R2GJBuntrR3TQ/edit?usp=sharing) |
-| Project Proposal | 10/10/24 | [live](https://www.overleaf.com/read/jpqjnkkfcfdz#c7d982) |
+| Project Proposal | 21/10/24 | [live](https://www.overleaf.com/read/jpqjnkkfcfdz#c7d982) |
 | Interim Report | 10/10/24 | [live](https://www.overleaf.com/read/cpwnrgqbytyn#3f35e2) |
 | Dissertation | 10/10/24 | [live](https://www.overleaf.com/read/dkjkpcdpsrss#313e48) |
 | Project Charter | 10/10/24 | [live](https://docs.google.com/document/d/1irBydJi_yYmKspPXKgBpm4K461BrlSz65kbGPTsgmrk/edit?usp=sharing) |
