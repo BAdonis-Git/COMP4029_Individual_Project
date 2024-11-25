@@ -1,1 +1,71 @@
+# Visual Studio temporary files and caches
 .vs/
+*.user
+*.suo
+*.rsuser
+
+# Build results
+bin/
+obj/
+[Ll]og/
+*.log
+*.tlog
+*.cache
+
+# .NET project artifacts
+*.dll
+*.exe
+*.pdb
+*.mdb
+*.ilk
+*.meta
+*.tmp
+*.tmp_proj
+*.nuget.props
+*.nuget.targets
+
+# MAUI-specific artifacts
+**/platforms/*/bin/
+**/platforms/*/obj/
+**/platforms/*/*.apk
+**/platforms/*/*.ipa
+**/platforms/*/*.app
+**/platforms/*/*.aab
+
+# NuGet packages and outputs
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+
+# Debugging and profiling
+*.ipch
+*.VC.db
+*.VC.opendb
+*.vsp
+*.vspx
+*.psess
+
+# IDE and editor-specific files
+.vscode/
+!.vscode/settings.json
+*.sln.docstates
+*.sln.iml
+*.localhistory/
+
+# Node.js (if using npm for MAUI Blazor projects)
+node_modules/
+
+# Publish outputs
+AppPackages/
+*.publishproj
+*.pubxml
+*.appx
+*.appxbundle
+*.appxupload
+*.msix
+*.msixbundle
+
+# Miscellaneous
+*.dbmdl
+*.jfm
