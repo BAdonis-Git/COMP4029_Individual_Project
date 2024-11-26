@@ -15,6 +15,12 @@
         Route="main" />
 
     <ShellContent
+        Title="Your Nexus"
+        Icon="{StaticResource IconDashboard}"
+        ContentTemplate="{DataTemplate pages:YourNexusPage}"
+        Route="nexus" />
+
+    <ShellContent
         Title="Projects"
         Icon="{StaticResource IconProjects}"
         ContentTemplate="{DataTemplate pages:ProjectListPage}"

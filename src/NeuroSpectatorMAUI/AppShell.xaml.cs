@@ -11,7 +11,18 @@ namespace NeuroSpectatorMAUI
             InitializeComponent();
             var currentTheme = Application.Current!.UserAppTheme;
             ThemeSegmentedControl.SelectedIndex = currentTheme == AppTheme.Light ? 0 : 1;
+
+            //RegisterRoutes();
         }
+
+        //private void RegisterRoutes()
+        //{
+        //    Routing.RegisterRoute("main", typeof(MainPage));
+        //    Routing.RegisterRoute("nexus", typeof(YourNexusPage));
+        //    Routing.RegisterRoute("projects", typeof(ProjectListPage));
+        //    Routing.RegisterRoute("manage", typeof(ManageMetaPage));
+        //}
+
         public static async Task DisplaySnackbarAsync(string message)
         {
             CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();

@@ -39,8 +39,12 @@ namespace NeuroSpectatorMAUI
             builder.Services.AddSingleton<ProjectListPageModel>();
             builder.Services.AddSingleton<ManageMetaPageModel>();
 
+            builder.Services.AddSingleton<YourNexusPageModel>();//HERE
+
             builder.Services.AddTransientWithShellRoute<ProjectDetailPage, ProjectDetailPageModel>("project");
             builder.Services.AddTransientWithShellRoute<TaskDetailPage, TaskDetailPageModel>("task");
+
+            builder.Services.AddTransientWithShellRoute<YourNexusPage, YourNexusPageModel>("nexus");//HERE
 
             return builder.Build();
         }
