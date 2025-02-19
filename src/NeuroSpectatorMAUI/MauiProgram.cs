@@ -28,23 +28,29 @@ namespace NeuroSpectatorMAUI
     		builder.Logging.AddDebug();
     		builder.Services.AddLogging(configure => configure.AddDebug());
 #endif
-
+            //Singleton Services
             builder.Services.AddSingleton<ProjectRepository>();
             builder.Services.AddSingleton<TaskRepository>();
             builder.Services.AddSingleton<CategoryRepository>();
             builder.Services.AddSingleton<TagRepository>();
             builder.Services.AddSingleton<SeedDataService>();
             builder.Services.AddSingleton<ModalErrorHandler>();
-            builder.Services.AddSingleton<MainPageModel>();
-            builder.Services.AddSingleton<ProjectListPageModel>();
-            builder.Services.AddSingleton<ManageMetaPageModel>();
+            builder.Services.AddSingleton<MuseDeviceManager>();//HERE
 
-            builder.Services.AddSingleton<YourNexusPageModel>();//HERE
+            //Transient Services
+            builder.Services.AddTransient<MainPageModel>();
+            builder.Services.AddTransient<ProjectListPageModel>();
+            builder.Services.AddTransient<ManageMetaPageModel>();
+            builder.Services.AddTransient<YourNexusPageModel>();//HERE
+            builder.Services.AddTransient<YourDevicesPageModel>();
+            builder.Services.AddTransient<BrowsePageModel>();
 
+            //Page Routes
             builder.Services.AddTransientWithShellRoute<ProjectDetailPage, ProjectDetailPageModel>("project");
             builder.Services.AddTransientWithShellRoute<TaskDetailPage, TaskDetailPageModel>("task");
-
             builder.Services.AddTransientWithShellRoute<YourNexusPage, YourNexusPageModel>("nexus");//HERE
+            builder.Services.AddTransientWithShellRoute<YourDevicesPage, YourDevicesPageModel>("devices");
+            builder.Services.AddTransientWithShellRoute<BrowsePage, BrowsePageModel>("browse");
 
             return builder.Build();
         }

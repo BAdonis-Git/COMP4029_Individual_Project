@@ -8,8 +8,12 @@
     Shell.FlyoutBehavior="Flyout"
     Title="NeuroSpectatorMAUI">
 
+    <Shell.ToolbarItems>
+        <ToolbarItem IconImageSource="{StaticResource IconMeta}" Clicked="OnAccountButtonClicked" />
+    </Shell.ToolbarItems>
+
     <ShellContent
-        Title="Dashboard"
+        Title="Your Dashboard"
         Icon="{StaticResource IconDashboard}"
         ContentTemplate="{DataTemplate pages:MainPage}"
         Route="main" />
@@ -19,6 +23,18 @@
         Icon="{StaticResource IconDashboard}"
         ContentTemplate="{DataTemplate pages:YourNexusPage}"
         Route="nexus" />
+
+    <ShellContent
+        Title="Your Devices"
+        Icon="{StaticResource IconDashboard}"
+        ContentTemplate="{DataTemplate pages:YourDevicesPage}"
+        Route="devices" />
+
+    <ShellContent
+        Title="Browse"
+        Icon="{StaticResource IconDashboard}"
+        ContentTemplate="{DataTemplate pages:BrowsePage}"
+        Route="browse" />
 
     <ShellContent
         Title="Projects"

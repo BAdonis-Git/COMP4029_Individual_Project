@@ -12,16 +12,8 @@ namespace NeuroSpectatorMAUI
             var currentTheme = Application.Current!.UserAppTheme;
             ThemeSegmentedControl.SelectedIndex = currentTheme == AppTheme.Light ? 0 : 1;
 
-            //RegisterRoutes();
+            
         }
-
-        //private void RegisterRoutes()
-        //{
-        //    Routing.RegisterRoute("main", typeof(MainPage));
-        //    Routing.RegisterRoute("nexus", typeof(YourNexusPage));
-        //    Routing.RegisterRoute("projects", typeof(ProjectListPage));
-        //    Routing.RegisterRoute("manage", typeof(ManageMetaPage));
-        //}
 
         public static async Task DisplaySnackbarAsync(string message)
         {
@@ -57,6 +49,11 @@ namespace NeuroSpectatorMAUI
         private void SfSegmentedControl_SelectionChanged(object sender, Syncfusion.Maui.Toolkit.SegmentedControl.SelectionChangedEventArgs e)
         {
             Application.Current!.UserAppTheme = e.NewIndex == 0 ? AppTheme.Light : AppTheme.Dark;
+        }
+
+        private async void OnAccountButtonClicked(object sender, EventArgs e)
+        {
+            await DisplaySnackbarAsync("Account button clicked");
         }
     }
 }

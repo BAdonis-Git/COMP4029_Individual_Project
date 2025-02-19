@@ -1,0 +1,216 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="framework.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pch.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_accelerometer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_action.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_advertising_stats.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_annotation_data.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_annotation_format.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_api_version.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_battery.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_computing_device_configuration.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_connection_state.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_drl_ref.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_dsp_data.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_eeg.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_error.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_error_type.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_event_loop.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_gyro.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_libmuse_version.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_log_listener.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_log_manager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_log_packet.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_magnetometer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_message_type.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_artifact_packet.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_configuration.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_connection_listener.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_connection_packet.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_data_listener.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_data_packet.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_data_packet_type.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_error_listener.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_file.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_file_reader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_file_writer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_listener.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_manager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_model.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_preset.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_version.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_notch_frequency.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_ppg.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_pressure.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_reader_listener.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_reader_muse.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_reader_muse_builder.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_reader_muse_playback_settings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_reader_playback_listener.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_result.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_result_level.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_severity.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_stringify.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_timestamp_mode.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_ultra_violet.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\computing_device_configuration_factory.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\conversions.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\event_loop_factory.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\muse_file_factory.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\muse_manager_windows.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\muse.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MuseWrapper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="dllmain.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="pch.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MuseWrapper.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

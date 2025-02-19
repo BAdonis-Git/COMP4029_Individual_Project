@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{ba010c6f-ea77-451c-9236-c5d9764aff36}</ProjectGuid>
+    <RootNamespace>MuseWrapper</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LibraryPath>.\lib;$(LibraryPath)</LibraryPath>
+    <OutDir>$(ProjectDir)x64\$(Configuration)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LibraryPath>.\lib;$(LibraryPath)</LibraryPath>
+    <OutDir>$(SolutionDir)..\NeuroSpectatorMAUI\src\NeuroSpectatorMAUI\x64\$(Configuration)\</OutDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;MUSEWRAPPER_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;MUSEWRAPPER_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;MUSEWRAPPER_EXPORTS;WINDOWS;_USRDLL;_ITERATOR_DEBUG_LEVEL=0;NDEBUG;WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>libmuse-uwp.lib;libmuse-wrt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;MUSEWRAPPER_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>libmuse-uwp.lib;libmuse-wrt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_accelerometer.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_action.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_advertising_stats.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_annotation_data.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_annotation_format.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_api_version.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_battery.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_computing_device_configuration.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_connection_state.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_drl_ref.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_dsp_data.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_eeg.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_error.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_error_type.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_event_loop.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_gyro.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_libmuse_version.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_log_listener.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_log_manager.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_log_packet.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_magnetometer.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_message_type.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_artifact_packet.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_configuration.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_connection_listener.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_connection_packet.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_data_listener.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_data_packet.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_data_packet_type.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_error_listener.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_file.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_file_reader.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_file_writer.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_listener.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_manager.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_model.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_preset.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_muse_version.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_notch_frequency.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_ppg.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_pressure.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_reader_listener.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_reader_muse.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_reader_muse_builder.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_reader_muse_playback_settings.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_reader_playback_listener.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_result.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_result_level.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_severity.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_stringify.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_timestamp_mode.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\bridge_ultra_violet.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\computing_device_configuration_factory.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\conversions.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\event_loop_factory.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\muse_file_factory.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\api\muse_manager_windows.h" />
+    <ClInclude Include="..\..\..\OneDrive\Documents\Projects_Uni\Dissertation\libmuse_windows_7.2.2\include\muse.h" />
+    <ClInclude Include="framework.h" />
+    <ClInclude Include="MuseWrapper.h" />
+    <ClInclude Include="pch.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="MuseWrapper.cpp" />
+    <ClCompile Include="pch.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
+    </ClCompile>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
