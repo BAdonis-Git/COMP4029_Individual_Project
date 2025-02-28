@@ -21,9 +21,9 @@ namespace NeuroSpectatorMAUI.PageModels
         [ObservableProperty]
         private string statusMessage = string.Empty;
 
-        public YourDevicesPageModel(MuseDeviceManager deviceManager)
+        public YourDevicesPageModel(/*MuseDeviceManager deviceManager*/)
         {
-            _deviceManager = deviceManager;
+            //_deviceManager = deviceManager;
         }
 
         private async Task LoadData()

@@ -10,4 +10,14 @@
 // add headers that you want to pre-compile here
 #include "framework.h"
 
+// Windows Header Files
+#include <windows.h>
+
+// C++ Standard Library
+#include <memory>
+#include <string>
+#include <sstream>
+#include <fstream>
+#include <stdexcept>
+
 #endif //PCH_H

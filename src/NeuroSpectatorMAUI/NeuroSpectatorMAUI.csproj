@@ -6,6 +6,22 @@
 		<!-- Uncomment to also build the tizen app. You will need to install tizen by following this: https://github.com/Samsung/Tizen.NET -->
 		<!-- <TargetFrameworks>$(TargetFrameworks);net9.0-tizen</TargetFrameworks> -->
 
+		<!-- Add the Windows SDK Package Version to fix the SDK compatibility issue -->
+		<WindowsSdkPackageVersion>10.0.22621.28</WindowsSdkPackageVersion>
+		
+		<!-- Suppress downgrade warnings since we're doing this intentionally -->
+		<NoWarn>$(NoWarn);NU1605</NoWarn>
+
+		<!-- Fix Windows packaging issues -->
+		<GenerateAppInstallerFile>False</GenerateAppInstallerFile>
+		<AppxAutoIncrementPackageRevision>False</AppxAutoIncrementPackageRevision>
+		<AppxSymbolPackageEnabled>False</AppxSymbolPackageEnabled>
+		<GenerateTestArtifacts>False</GenerateTestArtifacts>
+		<AppxBundle>Never</AppxBundle>
+		<DisableXbfLineInfo>False</DisableXbfLineInfo>
+		<AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>
+		<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+
 		<!-- Note for MacCatalyst:
 		The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
 		When specifying both architectures, use the plural <RuntimeIdentifiers> instead of the singular <RuntimeIdentifier>.
@@ -20,7 +36,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<!-- https://github.com/CommunityToolkit/Maui/issues/2205 -->
-		<NoWarn>XC0103</NoWarn>
+		<NoWarn>$(NoWarn);XC0103</NoWarn>
 		<MauiEnableXamlCBindingWithSourceCompilation>true</MauiEnableXamlCBindingWithSourceCompilation>
 
 		<!-- Display name -->
@@ -39,9 +55,16 @@
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
-		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.19041.0</SupportedOSPlatformVersion>
+		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.19041.0</TargetPlatformMinVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'tizen'">6.5</SupportedOSPlatformVersion>
+		<DefaultLanguage>en-gb</DefaultLanguage>
+	</PropertyGroup>
+
+	<!-- Fix RuntimeIdentifier issues for Windows -->
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+		<RuntimeIdentifiers>win10-x64</RuntimeIdentifiers>
+		<UseRidGraph>true</UseRidGraph>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -63,47 +86,91 @@
 	</ItemGroup>
 
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
-		<!-- Remove platform-specific references since they're causing issues -->
-		<Content Remove="Platforms\Windows\**\*.dll" />
-
-		<!-- Add the correct paths -->
-		<Content Include="..\MuseWrapper\x64\$(Configuration)\*.dll">
+		<!-- Visual C++ Runtime dependencies from solution's Libs folder -->
+		<Content Include="$(SolutionDir)Libs\msvcp140.dll">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<Link>msvcp140.dll</Link>
+		</Content>
+		<Content Include="$(SolutionDir)Libs\vcruntime140.dll">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<Link>vcruntime140.dll</Link>
+		</Content>
+		<Content Include="$(SolutionDir)Libs\vcruntime140_1.dll">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<Link>vcruntime140_1.dll</Link>
 		</Content>
 	</ItemGroup>
 
-	<ItemGroup>
-		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.0" />
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+		<!-- Remove platform-specific references -->
+		<Content Remove="Platforms\Windows\**\*.dll" />
+
+		<!-- Copy libmuse.dll first -->
+		<Content Include="x64\Release\libmuse.dll">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<Link>libmuse.dll</Link>
+		</Content>
+
+		<!-- Then copy MuseWrapper.dll -->
+		<Content Include="x64\Release\MuseWrapper.dll">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<Link>MuseWrapper.dll</Link>
+		</Content>
 	</ItemGroup>
 
+	<!-- Core MAUI packages -->
 	<ItemGroup>
-		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
-		<PackageReference Include="CommunityToolkit.Maui" Version="9.1.0" />
-		<PackageReference Include="Microsoft.Data.Sqlite.Core" Version="8.0.8" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="9.0.40" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.2" />
+	</ItemGroup>
+
+	<!-- Project packages with fixed versions -->
+	<ItemGroup>
+		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+		<PackageReference Include="CommunityToolkit.Maui" Version="9.0.0" />
+		<PackageReference Include="Microsoft.Data.Sqlite.Core" Version="9.0.2" />
 		<PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.10" />
-		<PackageReference Include="Syncfusion.Maui.Toolkit" Version="1.0.1" />
+		<PackageReference Include="Syncfusion.Maui.Toolkit" Version="1.0.3" />
+	</ItemGroup>
+
+	<!-- Windows-specific packages - versions aligned for compatibility -->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+		<PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.22621.756" />
+		<PackageReference Include="Microsoft.WindowsAppSDK" Version="1.4.231115000" />
+		<!-- Update CsWinRT to provide WinRT.Runtime 2.1.0.0 -->
+		<PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.1.0" />
+	</ItemGroup>
+
+	<!-- Ensure correct WinRT.Runtime reference -->
+	<ItemGroup>
+		<PackageReference Include="System.Runtime.WindowsRuntime" Version="4.7.0" />
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Compile Update="Pages\YourDevicesPage.xaml.cs">
-	    <DependentUpon>YourDevicesPage.xaml</DependentUpon>
-	  </Compile>
+		<Compile Update="Pages\YourDevicesPage.xaml.cs">
+			<DependentUpon>YourDevicesPage.xaml</DependentUpon>
+		</Compile>
 	</ItemGroup>
 
 	<ItemGroup>
-	  <MauiXaml Update="Pages\BrowsePage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	  <MauiXaml Update="Pages\YourDevicesPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
+		<MauiXaml Update="Pages\BrowsePage.xaml">
+			<Generator>MSBuild:Compile</Generator>
+		</MauiXaml>
+		<MauiXaml Update="Pages\YourDevicesPage.xaml">
+			<Generator>MSBuild:Compile</Generator>
+		</MauiXaml>
 	</ItemGroup>
+	
+	<!-- Create necessary directories for Windows packaging -->
+	<Target Name="EnsureAppxManifestDirectory" BeforeTargets="GenerateAppManifestFromAppx">
+		<MakeDir Directories="$(MSBuildProjectDirectory)\obj\Debug\net9.0-windows10.0.19041.0\MsixContent" />
+	</Target>
+	
 	<Target Name="DebugOutput" BeforeTargets="Build">
 		<Message Importance="high" Text="==== DLL Diagnostics ====" />
 		<Message Importance="high" Text="Configuration: $(Configuration)" />
-		<Message Importance="high" Text="ProjectDir: $(ProjectDir)" />
-		<Message Importance="high" Text="Looking for DLLs in: ..\MuseWrapper\x64\$(Configuration)" />
-		<Message Importance="high" Text="Current files in directory: $([System.IO.Directory]::GetFiles('..\MuseWrapper\x64\$(Configuration)', '*.dll'))" />
+		<Message Importance="high" Text="Looking for DLLs in: x64\Release" />
+		<Message Importance="high" Text="MuseWrapper exists: $([System.IO.File]::Exists('$(ProjectDir)x64\Release\MuseWrapper.dll'))" />
+		<Message Importance="high" Text="libmuse exists: $([System.IO.File]::Exists('$(ProjectDir)x64\Release\libmuse.dll'))" />
 	</Target>
 </Project>
