@@ -197,7 +197,21 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
             try
             {
                 var muses = museManager.GetMuses();
-                var deviceInfos = muses.Select(m => (IBCIDeviceInfo)m).ToList();
+                var deviceInfos = new List<IBCIDeviceInfo>();
+
+                // Convert Muse SDK objects to our model objects properly
+                foreach (var muse in muses)
+                {
+                    // Create a MuseDeviceInfo object from the Muse SDK object
+                    var deviceInfo = new MuseDeviceInfo
+                    {
+                        Name = muse.Name,
+                        BluetoothMac = muse.BluetoothMac,
+                        RSSI = muse.RSSI
+                    };
+
+                    deviceInfos.Add(deviceInfo);
+                }
 
                 // Update UI on the main thread
                 MainThread.BeginInvokeOnMainThread(() =>
@@ -214,6 +228,10 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
             }
             catch (Exception ex)
             {
+                // Log the detailed exception for debugging purposes
+                Console.WriteLine($"Device list processing error: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+
                 ErrorOccurred?.Invoke(this, new BCIErrorEventArgs(
                     "Error processing device list",
                     ex,
