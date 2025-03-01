@@ -198,18 +198,46 @@ namespace NeuroSpectator.Services.BCI.Muse
         /// </summary>
         public void ReceiveMuseDataPacket(MuseDataPacket packet, NeuroSpectator.Services.BCI.Muse.Core.Muse muse)
         {
-            if (packetTypeMapping.TryGetValue(packet.PacketType, out BrainWaveTypes waveType))
+            try
             {
-                if (waveType != BrainWaveTypes.None)
+                if (packetTypeMapping.TryGetValue(packet.PacketType, out BrainWaveTypes waveType))
                 {
-                    var brainWaveData = new BrainWaveData(
-                        waveType,
-                        packet.Values,
-                        DateTimeOffset.FromUnixTimeMilliseconds(packet.Timestamp)
-                    );
+                    if (waveType != BrainWaveTypes.None)
+                    {
+                        // Create a safe timestamp - handle potential out-of-range values
+                        DateTimeOffset timestamp;
+                        try
+                        {
+                            timestamp = DateTimeOffset.FromUnixTimeMilliseconds(packet.Timestamp);
+                        }
+                        catch (ArgumentOutOfRangeException)
+                        {
+                            // Use current time if the device timestamp is invalid
+                            timestamp = DateTimeOffset.Now;
+                            Console.WriteLine($"Warning: Received invalid timestamp {packet.Timestamp} from device, using current time instead.");
+                        }
 
-                    BrainWaveDataReceived?.Invoke(this, new BrainWaveDataEventArgs(brainWaveData));
+                        var brainWaveData = new BrainWaveData(
+                            waveType,
+                            packet.Values,
+                            timestamp
+                        );
+
+                        BrainWaveDataReceived?.Invoke(this, new BrainWaveDataEventArgs(brainWaveData));
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                // Log detailed information about the exception
+                Console.WriteLine($"Error in ReceiveMuseDataPacket: {ex.Message}");
+                Console.WriteLine($"PacketType: {packet.PacketType}, Timestamp: {packet.Timestamp}");
+                Console.WriteLine($"Values: {(packet.Values != null ? string.Join(", ", packet.Values) : "null")}");
+
+                ErrorOccurred?.Invoke(this, new BCIErrorEventArgs(
+                    $"Error processing data packet: {ex.Message}",
+                    ex,
+                    BCIErrorType.Unknown));
             }
         }
 
@@ -218,12 +246,38 @@ namespace NeuroSpectator.Services.BCI.Muse
         /// </summary>
         public void ReceiveMuseArtifactPacket(MuseArtifactPacket packet, NeuroSpectator.Services.BCI.Muse.Core.Muse muse)
         {
-            ArtifactDetected?.Invoke(this, new ArtifactEventArgs(
-                packet.Blink,
-                packet.JawClench,
-                !packet.HeadbandOn,
-                DateTimeOffset.FromUnixTimeMilliseconds(packet.Timestamp)
-            ));
+            try
+            {
+                // Create a safe timestamp - handle potential out-of-range values
+                DateTimeOffset timestamp;
+                try
+                {
+                    timestamp = DateTimeOffset.FromUnixTimeMilliseconds(packet.Timestamp);
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    // Use current time if the device timestamp is invalid
+                    timestamp = DateTimeOffset.Now;
+                    Console.WriteLine($"Warning: Received invalid timestamp {packet.Timestamp} from artifact packet, using current time instead.");
+                }
+
+                ArtifactDetected?.Invoke(this, new ArtifactEventArgs(
+                    packet.Blink,
+                    packet.JawClench,
+                    !packet.HeadbandOn,
+                    timestamp
+                ));
+            }
+            catch (Exception ex)
+            {
+                // Log detailed information about the exception
+                Console.WriteLine($"Error in ReceiveMuseArtifactPacket: {ex.Message}");
+
+                ErrorOccurred?.Invoke(this, new BCIErrorEventArgs(
+                    $"Error processing artifact packet: {ex.Message}",
+                    ex,
+                    BCIErrorType.Unknown));
+            }
         }
 
         /// <summary>
