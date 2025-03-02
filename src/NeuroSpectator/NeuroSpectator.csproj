@@ -1,0 +1,132 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFrameworks>net8.0-android;net8.0-ios;net8.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net8.0-windows10.0.19041.0</TargetFrameworks>
+		<!-- Uncomment to also build the tizen app. You will need to install tizen by following this: https://github.com/Samsung/Tizen.NET -->
+		<!-- <TargetFrameworks>$(TargetFrameworks);net8.0-tizen</TargetFrameworks> -->
+		<!-- Note for MacCatalyst:
+		The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
+		When specifying both architectures, use the plural <RuntimeIdentifiers> instead of the singular <RuntimeIdentifier>.
+		The Mac App Store will NOT accept apps with ONLY maccatalyst-arm64 indicated;
+		either BOTH runtimes must be indicated or ONLY macatalyst-x64. -->
+		<!-- For example: <RuntimeIdentifiers>maccatalyst-x64;maccatalyst-arm64</RuntimeIdentifiers> -->
+		<OutputType>Exe</OutputType>
+		<RootNamespace>NeuroSpectator</RootNamespace>
+		<UseMaui>true</UseMaui>
+		<SingleProject>true</SingleProject>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<!-- Display name -->
+		<ApplicationTitle>NeuroSpectator</ApplicationTitle>
+		<!-- App Identifier -->
+		<ApplicationId>com.companyname.neurospectator</ApplicationId>
+		<!-- Versions -->
+		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+		<ApplicationVersion>1</ApplicationVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">11.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">13.1</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
+		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'tizen'">6.5</SupportedOSPlatformVersion>
+		<DefaultLanguage>en-gb</DefaultLanguage>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- App Icon -->
+		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
+		<!-- Splash Screen -->
+		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
+		<!-- Images -->
+		<MauiImage Include="Resources\Images\*" />
+		<MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
+		<!-- Custom Fonts -->
+		<MauiFont Include="Resources\Fonts\*" />
+		<!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
+		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<AndroidResource Remove="Resources\Libs\**" />
+		<Compile Remove="Resources\Libs\**" />
+		<EmbeddedResource Remove="Resources\Libs\**" />
+		<MauiCss Remove="Resources\Libs\**" />
+		<MauiXaml Remove="Resources\Libs\**" />
+		<None Remove="Resources\Libs\**" />
+	</ItemGroup>
+
+	<!-- NuGet Package References -->
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+		<PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="$(MauiVersion)" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.1" />
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+	</ItemGroup>
+
+	<!-- Native libraries - Debug configuration for Windows -->
+	<ItemGroup Condition="'$(Configuration)' == 'Debug' And $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+		<Content Include="Resources\Raw\Debug_x64\libmuse.dll">
+			<Link>libmuse.dll</Link>
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
+	<!-- Native libraries - Release configuration for Windows -->
+	<ItemGroup Condition="'$(Configuration)' == 'Release' And $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+		<Content Include="Resources\Raw\Release_x64\libmuse.dll">
+			<Link>libmuse.dll</Link>
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
+	<!-- Embedded resources - Debug configuration -->
+	<ItemGroup Condition="'$(Configuration)' == 'Debug'">
+		<EmbeddedResource Include="Resources\Raw\Debug_x64\libmuse.dll" />
+	</ItemGroup>
+
+	<!-- Embedded resources - Release configuration -->
+	<ItemGroup Condition="'$(Configuration)' == 'Release'">
+		<EmbeddedResource Include="Resources\Raw\Release_x64\libmuse.dll" />
+	</ItemGroup>
+
+	<!-- Platform-specific configuration for Android -->
+
+	<!-- Platform-specific configuration for iOS -->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+		<NativeReference Include="Resources\Libs\iOS\libmuse.framework">
+			<Kind>Framework</Kind>
+			<SmartLink>False</SmartLink>
+		</NativeReference>
+	</ItemGroup>
+
+	<!-- Folder structure placeholders -->
+	<ItemGroup>
+		<Folder Include="Data\" />
+		<Folder Include="Models\" />
+		<Folder Include="Models\BCI\" />
+		<Folder Include="Models\BCI\Common\" />
+		<Folder Include="Models\BCI\Muse\" />
+		<Folder Include="Services\BCI\Common\" />
+		<Folder Include="Services\BCI\Factory\" />
+		<Folder Include="Services\BCI\Interfaces\" />
+		<Folder Include="Services\BCI\Muse\Platform\" />
+		<Folder Include="Utilities\" />
+		<Folder Include="PageModels\" />
+		<Folder Include="Resources\Raw\Debug_x64\" />
+		<Folder Include="Resources\Raw\Release_x64\" />
+	</ItemGroup>
+	<ItemGroup>
+		<MauiXaml Update="Pages\YourDevicesPage.xaml">
+			<Generator>MSBuild:Compile</Generator>
+		</MauiXaml>
+	</ItemGroup>
+
+	<!-- Make sure to create these directories during build -->
+	<Target Name="EnsureLibFolders" BeforeTargets="PreBuildEvent">
+		<MakeDir Directories="Resources\Libs\Android" Condition="!Exists('Resources\Libs\Android')" />
+		<MakeDir Directories="Resources\Libs\iOS" Condition="!Exists('Resources\Libs\iOS')" />
+		<MakeDir Directories="Resources\Raw\Debug_x64" Condition="!Exists('Resources\Raw\Debug_x64')" />
+		<MakeDir Directories="Resources\Raw\Release_x64" Condition="!Exists('Resources\Raw\Release_x64')" />
+	</Target>
+</Project>
