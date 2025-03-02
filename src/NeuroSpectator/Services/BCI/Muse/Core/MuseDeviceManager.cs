@@ -130,28 +130,65 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
             await semaphore.WaitAsync();
             try
             {
+                // Stop scanning while we connect to a device
+                if (isScanning)
+                {
+                    Console.WriteLine("Stopping scanning before connecting to device");
+                    await StopScanningAsync();
+                }
+
                 // Disconnect from current device if any
                 if (CurrentDevice != null)
                 {
+                    Console.WriteLine("Disconnecting from current device before connecting to new device");
                     await DisconnectCurrentDeviceAsync();
+
+                    // Small delay to ensure proper cleanup
+                    await Task.Delay(1000);
                 }
+
+                // Log connection attempt
+                Console.WriteLine($"Connecting to device: {museInfo.Name} ({museInfo.BluetoothMac})");
 
                 // Create a new device instance
                 var device = new MuseDevice(museInfo);
 
-                // Connect to the device
-                await device.ConnectAsync();
+                try
+                {
+                    // Connect to the device
+                    Console.WriteLine("Initiating connection sequence");
+                    await device.ConnectAsync();
 
-                // Set as current device
-                CurrentDevice = device;
+                    // Check if connection was successful
+                    if (device.IsConnected)
+                    {
+                        Console.WriteLine($"Successfully connected to {museInfo.Name}");
 
-                // Return the device
-                return device;
+                        // Set as current device
+                        CurrentDevice = device;
+
+                        // Return the device
+                        return device;
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Connection to {museInfo.Name} failed - device reports not connected");
+                        device.Dispose();
+                        throw new Exception("Device reported successful connection but is not connected");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error during connection process: {ex.Message}");
+                    device.Dispose();
+                    throw;
+                }
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Error in ConnectToDeviceAsync: {ex.Message}");
                 ErrorOccurred?.Invoke(this, new BCIErrorEventArgs(
-                    $"Error connecting to device {deviceInfo.Name}",
+                    $"Error connecting to device {deviceInfo.Name}: {ex.Message}",
                     ex,
                     BCIErrorType.ConnectionFailed));
                 return null;

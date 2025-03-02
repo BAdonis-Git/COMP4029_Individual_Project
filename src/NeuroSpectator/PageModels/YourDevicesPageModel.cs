@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NeuroSpectator.Models.BCI.Common;
 using NeuroSpectator.Services.BCI.Interfaces;
+using NeuroSpectator.Services.BCI.Muse; // Add this using directive to find MuseDevice
 using ConnectionState = NeuroSpectator.Models.BCI.Common.ConnectionState;
 
 namespace NeuroSpectator.PageModels
@@ -144,7 +145,7 @@ namespace NeuroSpectator.PageModels
         }
 
         /// <summary>
-        /// Connects to the selected device
+        /// Connects to the selected device with improved error handling
         /// </summary>
         private async Task ConnectAsync()
         {
@@ -154,27 +155,56 @@ namespace NeuroSpectator.PageModels
             {
                 StatusText = $"Connecting to {SelectedDevice.Name}...";
                 CanConnect = false;
+                CanDisconnect = false; // Disable disconnect while connecting
 
+                // Stop scanning first to avoid interference
+                if (IsScanning)
+                {
+                    await StopScanAsync();
+                }
+
+                // Track time for connection process
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+                // Attempt to connect
                 IBCIDevice device = await deviceManager.ConnectToDeviceAsync(SelectedDevice);
 
                 if (device != null)
                 {
+                    stopwatch.Stop();
+                    DataText = $"Connection established in {stopwatch.ElapsedMilliseconds}ms";
+                    StatusText = $"Connected to {SelectedDevice.Name}";
+
                     // Subscribe to device events
                     device.ConnectionStateChanged += OnDeviceConnectionStateChanged;
                     device.BrainWaveDataReceived += OnBrainWaveDataReceived;
                     device.ArtifactDetected += OnArtifactDetected;
                     device.ErrorOccurred += OnDeviceErrorOccurred;
 
-                    // Register for brain wave data
+                    // Ensure we get all brain wave data
                     device.RegisterForBrainWaveData(BrainWaveTypes.All);
+
+                    // Verify connection
+                    if (device is MuseDevice museDevice)
+                    {
+                        var verified = await museDevice.VerifyConnectionAsync();
+                        if (verified)
+                        {
+                            StatusText += " (verified)";
+                        }
+                        else
+                        {
+                            StatusText += " (not verified - check device)";
+                        }
+                    }
 
                     IsConnected = true;
                     CanDisconnect = true;
-                    StatusText = $"Connected to {SelectedDevice.Name}";
                 }
                 else
                 {
-                    StatusText = "Connection failed";
+                    stopwatch.Stop();
+                    StatusText = $"Connection failed after {stopwatch.ElapsedMilliseconds}ms";
                     CanConnect = true;
                 }
             }
@@ -187,23 +217,31 @@ namespace NeuroSpectator.PageModels
         }
 
         /// <summary>
-        /// Disconnects from the current device
+        /// Disconnects from the current device with improved handling
         /// </summary>
         private async Task DisconnectAsync()
         {
             try
             {
                 StatusText = "Disconnecting...";
+                CanDisconnect = false;
+
+                // Track time for disconnection process
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
                 await deviceManager.DisconnectCurrentDeviceAsync();
 
+                stopwatch.Stop();
+
                 IsConnected = false;
-                CanDisconnect = false;
                 CanConnect = SelectedDevice != null;
-                StatusText = "Disconnected";
+                StatusText = $"Disconnected (took {stopwatch.ElapsedMilliseconds}ms)";
+                DataText = "No data";
             }
             catch (Exception ex)
             {
                 StatusText = $"Disconnect error: {ex.Message}";
+                CanDisconnect = IsConnected;
                 Debug.WriteLine($"Disconnect error: {ex}");
             }
         }
@@ -225,11 +263,14 @@ namespace NeuroSpectator.PageModels
         }
 
         /// <summary>
-        /// Handles the ConnectionStateChanged event
+        /// Handles the ConnectionStateChanged event with improved diagnostics
         /// </summary>
         private void OnDeviceConnectionStateChanged(object sender, ConnectionStateChangedEventArgs e)
         {
             StatusText = $"Connection state: {e.NewState}";
+
+            // Log transition for debugging
+            Debug.WriteLine($"Connection transition: {e.OldState} -> {e.NewState}");
 
             switch (e.NewState)
             {
@@ -237,15 +278,32 @@ namespace NeuroSpectator.PageModels
                     IsConnected = true;
                     CanConnect = false;
                     CanDisconnect = true;
+                    DataText = "Connected and waiting for data...";
                     break;
 
                 case ConnectionState.Disconnected:
                     IsConnected = false;
                     CanConnect = SelectedDevice != null;
                     CanDisconnect = false;
+                    DataText = "No data - device disconnected";
                     break;
 
                 case ConnectionState.Connecting:
+                    CanConnect = false;
+                    CanDisconnect = false;
+                    DataText = "Establishing connection...";
+                    break;
+
+                case ConnectionState.NeedsUpdate:
+                    StatusText = "Device needs firmware update";
+                    IsConnected = false;
+                    CanConnect = false;
+                    CanDisconnect = false;
+                    break;
+
+                case ConnectionState.NeedsLicense:
+                    StatusText = "Device needs license activation";
+                    IsConnected = false;
                     CanConnect = false;
                     CanDisconnect = false;
                     break;
@@ -253,11 +311,38 @@ namespace NeuroSpectator.PageModels
         }
 
         /// <summary>
-        /// Handles the BrainWaveDataReceived event
+        /// Improved brain wave data handler with data validation
         /// </summary>
         private void OnBrainWaveDataReceived(object sender, BrainWaveDataEventArgs e)
         {
+            // Validate data
+            if (e?.BrainWaveData == null)
+            {
+                DataText = "Received invalid data packet";
+                return;
+            }
+
             var waveType = e.BrainWaveData.WaveType;
+
+            // Check for potentially invalid values
+            bool hasInvalidData = false;
+            if (e.BrainWaveData.ChannelValues != null)
+            {
+                foreach (var value in e.BrainWaveData.ChannelValues)
+                {
+                    if (double.IsNaN(value) || double.IsInfinity(value))
+                    {
+                        hasInvalidData = true;
+                        break;
+                    }
+                }
+            }
+
+            if (hasInvalidData)
+            {
+                DataText = $"{waveType}: Contains invalid values";
+                return;
+            }
 
             switch (waveType)
             {
@@ -282,8 +367,17 @@ namespace NeuroSpectator.PageModels
                     break;
 
                 case BrainWaveTypes.Raw:
-                    // For EEG data, just show channel count as it's too much data to display
-                    DataText = $"EEG: {e.BrainWaveData.ChannelCount} channels active";
+                    // For EEG data, show more details
+                    if (e.BrainWaveData.ChannelValues != null && e.BrainWaveData.ChannelValues.Length > 0)
+                    {
+                        var minValue = e.BrainWaveData.ChannelValues.Min();
+                        var maxValue = e.BrainWaveData.ChannelValues.Max();
+                        DataText = $"EEG: {e.BrainWaveData.ChannelCount} channels, range: {minValue:F1} to {maxValue:F1}";
+                    }
+                    else
+                    {
+                        DataText = $"EEG: {e.BrainWaveData.ChannelCount} channels";
+                    }
                     break;
             }
         }
