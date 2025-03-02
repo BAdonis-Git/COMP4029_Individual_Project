@@ -630,18 +630,45 @@ namespace NeuroSpectator.Services.BCI.Muse
                         DateTimeOffset timestamp;
                         try
                         {
-                            timestamp = DateTimeOffset.FromUnixTimeMilliseconds(packet.Timestamp);
+                            // Check if timestamp is within valid range for DateTimeOffset
+                            const long minTimestamp = -62135596800000; // DateTimeOffset.MinValue in milliseconds
+                            const long maxTimestamp = 253402300799999; // DateTimeOffset.MaxValue in milliseconds
+
+                            if (packet.Timestamp < minTimestamp || packet.Timestamp > maxTimestamp)
+                            {
+                                timestamp = DateTimeOffset.Now;
+                                Console.WriteLine($"Warning: Invalid timestamp {packet.Timestamp} (out of range), using current time");
+                            }
+                            else
+                            {
+                                timestamp = DateTimeOffset.FromUnixTimeMilliseconds(packet.Timestamp);
+                            }
                         }
-                        catch (ArgumentOutOfRangeException)
+                        catch (Exception ex)
                         {
                             // Use current time if the device timestamp is invalid
                             timestamp = DateTimeOffset.Now;
-                            Console.WriteLine($"Warning: Received invalid timestamp {packet.Timestamp} from device, using current time instead.");
+                            Console.WriteLine($"Warning: Error converting timestamp {packet.Timestamp}: {ex.Message}, using current time");
+                        }
+
+                        // Validate channel values
+                        double[] validatedValues = packet.Values;
+                        if (validatedValues != null)
+                        {
+                            // Check for NaN and Infinity values and replace them
+                            for (int i = 0; i < validatedValues.Length; i++)
+                            {
+                                if (double.IsNaN(validatedValues[i]) || double.IsInfinity(validatedValues[i]))
+                                {
+                                    validatedValues[i] = 0.0;
+                                    Console.WriteLine($"Warning: Invalid value at index {i} replaced with 0.0");
+                                }
+                            }
                         }
 
                         var brainWaveData = new BrainWaveData(
                             waveType,
-                            packet.Values,
+                            validatedValues ?? Array.Empty<double>(), // Ensure we never pass null
                             timestamp
                         );
 
@@ -674,13 +701,25 @@ namespace NeuroSpectator.Services.BCI.Muse
                 DateTimeOffset timestamp;
                 try
                 {
-                    timestamp = DateTimeOffset.FromUnixTimeMilliseconds(packet.Timestamp);
+                    // Check if timestamp is within valid range for DateTimeOffset
+                    const long minTimestamp = -62135596800000; // DateTimeOffset.MinValue in milliseconds
+                    const long maxTimestamp = 253402300799999; // DateTimeOffset.MaxValue in milliseconds
+
+                    if (packet.Timestamp < minTimestamp || packet.Timestamp > maxTimestamp)
+                    {
+                        timestamp = DateTimeOffset.Now;
+                        Console.WriteLine($"Warning: Invalid artifact timestamp {packet.Timestamp} (out of range), using current time");
+                    }
+                    else
+                    {
+                        timestamp = DateTimeOffset.FromUnixTimeMilliseconds(packet.Timestamp);
+                    }
                 }
-                catch (ArgumentOutOfRangeException)
+                catch (Exception ex)
                 {
                     // Use current time if the device timestamp is invalid
                     timestamp = DateTimeOffset.Now;
-                    Console.WriteLine($"Warning: Received invalid timestamp {packet.Timestamp} from artifact packet, using current time instead.");
+                    Console.WriteLine($"Warning: Error converting artifact timestamp {packet.Timestamp}: {ex.Message}, using current time");
                 }
 
                 ArtifactDetected?.Invoke(this, new ArtifactEventArgs(

@@ -311,74 +311,111 @@ namespace NeuroSpectator.PageModels
         }
 
         /// <summary>
-        /// Improved brain wave data handler with data validation
+        /// Improved brain wave data handler with robust error handling
         /// </summary>
         private void OnBrainWaveDataReceived(object sender, BrainWaveDataEventArgs e)
         {
-            // Validate data
-            if (e?.BrainWaveData == null)
+            try
             {
-                DataText = "Received invalid data packet";
-                return;
-            }
-
-            var waveType = e.BrainWaveData.WaveType;
-
-            // Check for potentially invalid values
-            bool hasInvalidData = false;
-            if (e.BrainWaveData.ChannelValues != null)
-            {
-                foreach (var value in e.BrainWaveData.ChannelValues)
+                // Basic validation
+                if (e?.BrainWaveData == null)
                 {
-                    if (double.IsNaN(value) || double.IsInfinity(value))
-                    {
-                        hasInvalidData = true;
+                    DataText = "Received invalid data packet";
+                    return;
+                }
+
+                var waveType = e.BrainWaveData.WaveType;
+
+                // Handle different wave types
+                switch (waveType)
+                {
+                    case BrainWaveTypes.Alpha:
+                        DataText = $"Alpha: {e.BrainWaveData.AverageValue:F2}";
                         break;
-                    }
+
+                    case BrainWaveTypes.Beta:
+                        DataText = $"Beta: {e.BrainWaveData.AverageValue:F2}";
+                        break;
+
+                    case BrainWaveTypes.Delta:
+                        DataText = $"Delta: {e.BrainWaveData.AverageValue:F2}";
+                        break;
+
+                    case BrainWaveTypes.Theta:
+                        DataText = $"Theta: {e.BrainWaveData.AverageValue:F2}";
+                        break;
+
+                    case BrainWaveTypes.Gamma:
+                        DataText = $"Gamma: {e.BrainWaveData.AverageValue:F2}";
+                        break;
+
+                    case BrainWaveTypes.Raw:
+                        // Safer handling of raw EEG data
+                        try
+                        {
+                            if (e.BrainWaveData.ChannelValues != null && e.BrainWaveData.ChannelValues.Length > 0)
+                            {
+                                // Check for invalid values
+                                bool hasInvalidValues = false;
+                                foreach (var value in e.BrainWaveData.ChannelValues)
+                                {
+                                    if (double.IsNaN(value) || double.IsInfinity(value))
+                                    {
+                                        hasInvalidValues = true;
+                                        break;
+                                    }
+                                }
+
+                                if (hasInvalidValues)
+                                {
+                                    DataText = "Raw: Contains invalid values";
+                                }
+                                else
+                                {
+                                    // Safe min/max calculation
+                                    double min = double.MaxValue;
+                                    double max = double.MinValue;
+
+                                    foreach (var value in e.BrainWaveData.ChannelValues)
+                                    {
+                                        if (value < min) min = value;
+                                        if (value > max) max = value;
+                                    }
+
+                                    // Only use min/max if we found valid values
+                                    if (min != double.MaxValue && max != double.MinValue)
+                                    {
+                                        DataText = $"EEG: {e.BrainWaveData.ChannelCount} channels, range: {min:F1} to {max:F1}";
+                                    }
+                                    else
+                                    {
+                                        DataText = $"EEG: {e.BrainWaveData.ChannelCount} channels";
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                DataText = $"EEG: {e.BrainWaveData.ChannelCount} channels";
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            // Fallback for any errors in raw data processing
+                            Debug.WriteLine($"Error processing raw EEG data: {ex.Message}");
+                            DataText = "EEG: Error processing data";
+                        }
+                        break;
+
+                    default:
+                        DataText = $"Received {waveType} data";
+                        break;
                 }
             }
-
-            if (hasInvalidData)
+            catch (Exception ex)
             {
-                DataText = $"{waveType}: Contains invalid values";
-                return;
-            }
-
-            switch (waveType)
-            {
-                case BrainWaveTypes.Alpha:
-                    DataText = $"Alpha: {e.BrainWaveData.AverageValue:F2}";
-                    break;
-
-                case BrainWaveTypes.Beta:
-                    DataText = $"Beta: {e.BrainWaveData.AverageValue:F2}";
-                    break;
-
-                case BrainWaveTypes.Delta:
-                    DataText = $"Delta: {e.BrainWaveData.AverageValue:F2}";
-                    break;
-
-                case BrainWaveTypes.Theta:
-                    DataText = $"Theta: {e.BrainWaveData.AverageValue:F2}";
-                    break;
-
-                case BrainWaveTypes.Gamma:
-                    DataText = $"Gamma: {e.BrainWaveData.AverageValue:F2}";
-                    break;
-
-                case BrainWaveTypes.Raw:
-                    // For EEG data, show more details
-                    if (e.BrainWaveData.ChannelValues != null && e.BrainWaveData.ChannelValues.Length > 0)
-                    {
-                        var minValue = e.BrainWaveData.ChannelValues.Min();
-                        var maxValue = e.BrainWaveData.ChannelValues.Max();
-                        DataText = $"EEG: {e.BrainWaveData.ChannelCount} channels, range: {minValue:F1} to {maxValue:F1}";
-                    }
-                    else
-                    {
-                        DataText = $"EEG: {e.BrainWaveData.ChannelCount} channels";
-                    }
-                    break;
+                // Top-level exception handler
+                Debug.WriteLine($"Error in OnBrainWaveDataReceived: {ex.Message}");
+                DataText = "Error processing brain wave data";
             }
         }
 
