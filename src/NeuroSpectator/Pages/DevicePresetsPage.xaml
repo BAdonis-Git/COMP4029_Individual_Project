@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:pageModels="clr-namespace:NeuroSpectator.PageModels"
+             x:Class="NeuroSpectator.Pages.DevicePresetsPage"
+             Title="Device Presets"
+             BackgroundColor="#1E1E1E">
+
+    <ContentPage.Resources>
+        <Style x:Key="HeaderLabelStyle" TargetType="Label">
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="TextColor" Value="#CCCCCC"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+
+        <Style x:Key="SubHeaderLabelStyle" TargetType="Label">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="TextColor" Value="#AAAAAA"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+        </Style>
+
+        <Style x:Key="NormalLabelStyle" TargetType="Label">
+            <Setter Property="TextColor" Value="#CCCCCC"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+
+        <Style x:Key="CardStyle" TargetType="Frame">
+            <Setter Property="BackgroundColor" Value="#2D2D2D"/>
+            <Setter Property="BorderColor" Value="#444444"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="15"/>
+            <Setter Property="Margin" Value="5"/>
+        </Style>
+
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="#B388FF"/>
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="CornerRadius" Value="5"/>
+        </Style>
+
+        <Style x:Key="SecondaryButtonStyle" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="#444444"/>
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="CornerRadius" Value="5"/>
+        </Style>
+
+        <Style x:Key="PresetCardSelected" TargetType="Frame">
+            <Setter Property="BackgroundColor" Value="#3D3D3D"/>
+            <Setter Property="BorderColor" Value="#B388FF"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="15"/>
+            <Setter Property="Margin" Value="5"/>
+        </Style>
+
+        <Style x:Key="PresetCardUnselected" TargetType="Frame">
+            <Setter Property="BackgroundColor" Value="#2D2D2D"/>
+            <Setter Property="BorderColor" Value="#444444"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="15"/>
+            <Setter Property="Margin" Value="5"/>
+        </Style>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,*,Auto" Padding="15">
+        <Label 
+            Text="{Binding DeviceName, StringFormat='Presets for {0}'}"
+            Grid.Row="0"
+            Style="{StaticResource HeaderLabelStyle}"
+            HorizontalOptions="Center"
+            Margin="0,10,0,20"/>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Spacing="15">
+                <!-- Presets List -->
+                <Label Text="Available Presets" Style="{StaticResource SubHeaderLabelStyle}"/>
+
+                <!-- PRESET_21 -->
+                <Frame Style="{StaticResource PresetCardSelected}">
+                    <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto">
+                        <Label Grid.Row="0" Grid.Column="0"
+                               Text="PRESET_21" 
+                               TextColor="#B388FF" 
+                               FontSize="16" 
+                               FontAttributes="Bold"/>
+
+                        <Label Grid.Row="1" Grid.Column="0"
+                               Text="Optimized for recording high quality EEG data"
+                               TextColor="#CCCCCC" 
+                               FontSize="14"/>
+
+                        <Label Grid.Row="0" Grid.Column="1" Grid.RowSpan="2"
+                               Text="✓" 
+                               TextColor="#92D36E" 
+                               FontSize="24" 
+                               VerticalOptions="Center"/>
+                    </Grid>
+                </Frame>
+
+                <!-- PRESET_22 -->
+                <Frame Style="{StaticResource PresetCardUnselected}">
+                    <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto">
+                        <Label Grid.Row="0" Grid.Column="0"
+                               Text="PRESET_22" 
+                               TextColor="White" 
+                               FontSize="16" 
+                               FontAttributes="Bold"/>
+
+                        <Label Grid.Row="1" Grid.Column="0"
+                               Text="Balanced power-saving mode with good EEG quality"
+                               TextColor="#AAAAAA" 
+                               FontSize="14"/>
+                    </Grid>
+                </Frame>
+
+                <!-- PRESET_AB -->
+                <Frame Style="{StaticResource PresetCardUnselected}">
+                    <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto">
+                        <Label Grid.Row="0" Grid.Column="0"
+                               Text="PRESET_AB" 
+                               TextColor="White" 
+                               FontSize="16" 
+                               FontAttributes="Bold"/>
+
+                        <Label Grid.Row="1" Grid.Column="0"
+                               Text="Artifact detection mode for detecting blinks and jaw clenches"
+                               TextColor="#AAAAAA" 
+                               FontSize="14"/>
+                    </Grid>
+                </Frame>
+
+                <!-- Custom Settings Section -->
+                <Label Text="Custom Settings" 
+                       Style="{StaticResource SubHeaderLabelStyle}"
+                       Margin="0,20,0,10"/>
+
+                <!-- Notch Filter -->
+                <Frame Style="{StaticResource CardStyle}">
+                    <Grid RowDefinitions="Auto,Auto">
+                        <Label Grid.Row="0"
+                               Text="Notch Filter" 
+                               TextColor="White" 
+                               FontSize="16" 
+                               FontAttributes="Bold"/>
+
+                        <HorizontalStackLayout Grid.Row="1" Spacing="10" Margin="0,10,0,0">
+                            <RadioButton Content="Off" 
+                                         TextColor="#CCCCCC"
+                                         IsChecked="False"
+                                         GroupName="NotchFilter"/>
+
+                            <RadioButton Content="50Hz" 
+                                         TextColor="#CCCCCC"
+                                         IsChecked="True"
+                                         GroupName="NotchFilter"/>
+
+                            <RadioButton Content="60Hz" 
+                                         TextColor="#CCCCCC"
+                                         IsChecked="False"
+                                         GroupName="NotchFilter"/>
+                        </HorizontalStackLayout>
+                    </Grid>
+                </Frame>
+
+                <!-- Sample Rate -->
+                <Frame Style="{StaticResource CardStyle}">
+                    <Grid RowDefinitions="Auto,Auto">
+                        <Label Grid.Row="0"
+                               Text="Sample Rate" 
+                               TextColor="White" 
+                               FontSize="16" 
+                               FontAttributes="Bold"/>
+
+                        <Picker Grid.Row="1" 
+                                Title="Select Sample Rate"
+                                TextColor="#CCCCCC"
+                                TitleColor="#AAAAAA"
+                                BackgroundColor="#383838"
+                                Margin="0,10,0,0">
+                            <Picker.Items>
+                                <x:String>128 Hz</x:String>
+                                <x:String>256 Hz (Default)</x:String>
+                                <x:String>512 Hz</x:String>
+                            </Picker.Items>
+                            <Picker.SelectedIndex>1</Picker.SelectedIndex>
+                        </Picker>
+                    </Grid>
+                </Frame>
+
+                <!-- DRL/REF Settings -->
+                <Frame Style="{StaticResource CardStyle}">
+                    <Grid RowDefinitions="Auto,Auto">
+                        <Label Grid.Row="0"
+                               Text="DRL/REF Settings" 
+                               TextColor="White" 
+                               FontSize="16" 
+                               FontAttributes="Bold"/>
+
+                        <Grid Grid.Row="1" Margin="0,10,0,0" RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*">
+                            <CheckBox Grid.Row="0" Grid.Column="0" 
+                                      IsChecked="True" 
+                                      Color="#B388FF"/>
+
+                            <Label Grid.Row="0" Grid.Column="1" 
+                                   Text="Enable DRL/REF" 
+                                   TextColor="#CCCCCC" 
+                                   VerticalOptions="Center"/>
+
+                            <Label Grid.Row="1" Grid.Column="1" 
+                                   Text="Improves signal quality but uses more power" 
+                                   TextColor="#AAAAAA" 
+                                   FontSize="12"/>
+                        </Grid>
+                    </Grid>
+                </Frame>
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <Grid Grid.Row="2" ColumnDefinitions="*,*" Margin="0,15,0,0" ColumnSpacing="10">
+            <Button Grid.Column="0"
+                    Text="Cancel" 
+                    Command="{Binding CancelCommand}"
+                    Style="{StaticResource SecondaryButtonStyle}"/>
+
+            <Button Grid.Column="1"
+                    Text="Apply" 
+                    Command="{Binding ApplyCommand}"
+                    Style="{StaticResource PrimaryButtonStyle}"/>
+        </Grid>
+    </Grid>
+</ContentPage>

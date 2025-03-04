@@ -7,8 +7,10 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NeuroSpectator.Models.BCI.Common;
+using NeuroSpectator.Models.BCI.Muse;
+using NeuroSpectator.Services;
 using NeuroSpectator.Services.BCI.Interfaces;
-using NeuroSpectator.Services.BCI.Muse; // Add this using directive to find MuseDevice
+using NeuroSpectator.Services.BCI.Muse;
 using ConnectionState = NeuroSpectator.Models.BCI.Common.ConnectionState;
 
 namespace NeuroSpectator.PageModels
@@ -16,9 +18,12 @@ namespace NeuroSpectator.PageModels
     /// <summary>
     /// View model for the YourDevicesPage
     /// </summary>
-    public partial class YourDevicesPageModel : ObservableObject
+    public partial class YourDevicesPageModel : ObservableObject, IDisposable
     {
         private readonly IBCIDeviceManager deviceManager;
+        private Timer batteryUpdateTimer;
+        private const int BatteryUpdateIntervalMs = 10000; // 10 seconds
+        private bool _disposed = false; // Track whether Dispose has been called
 
         [ObservableProperty]
         private bool isInitialized;
@@ -30,6 +35,7 @@ namespace NeuroSpectator.PageModels
         private bool isConnected;
 
         [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(IsNotConnected))]
         private bool canInitialize = true;
 
         [ObservableProperty]
@@ -50,10 +56,31 @@ namespace NeuroSpectator.PageModels
         [ObservableProperty]
         private IBCIDeviceInfo selectedDevice;
 
-        /// <summary>
-        /// Gets the collection of available devices
-        /// </summary>
+        [ObservableProperty]
+        private StoredDeviceInfo selectedStoredDevice;
+
+        [ObservableProperty]
+        private double batteryLevel = 0;
+
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(BatteryArcAngle))]
+        [NotifyPropertyChangedFor(nameof(BatteryPercentText))]
+        private double batteryPercent = 0;
+
+        [ObservableProperty]
+        private Services.DeviceSettingsModel currentDeviceSettings = new Services.DeviceSettingsModel();
+
+        // Derived Properties
+        public bool IsNotConnected => !IsConnected;
+        public double BatteryArcAngle => 360 * (BatteryPercent / 100.0);
+        public string BatteryPercentText => $"{BatteryPercent:F0}%";
+        public bool BatteryPercentIsLargeArc => BatteryPercent > 50;
+
+        // Collections
         public ObservableCollection<IBCIDeviceInfo> AvailableDevices => deviceManager.AvailableDevices;
+
+        [ObservableProperty]
+        private ObservableCollection<StoredDeviceInfo> storedDevices = new ObservableCollection<StoredDeviceInfo>();
 
         // Commands
         public ICommand InitializeCommand { get; }
@@ -61,6 +88,10 @@ namespace NeuroSpectator.PageModels
         public ICommand StopScanCommand { get; }
         public ICommand ConnectCommand { get; }
         public ICommand DisconnectCommand { get; }
+        public ICommand ShowPresetsCommand { get; }
+        public ICommand SaveDeviceSettingsCommand { get; }
+        public ICommand ShowSupportedDevicesCommand { get; }
+        public ICommand EditDevicePresetsCommand { get; }
 
         /// <summary>
         /// Creates a new instance of the YourDevicesPageModel class
@@ -75,10 +106,43 @@ namespace NeuroSpectator.PageModels
             StopScanCommand = new AsyncRelayCommand(StopScanAsync, () => IsScanning);
             ConnectCommand = new AsyncRelayCommand(ConnectAsync, () => CanConnect);
             DisconnectCommand = new AsyncRelayCommand(DisconnectAsync, () => CanDisconnect);
+            ShowPresetsCommand = new AsyncRelayCommand(ShowPresetsAsync, () => IsConnected);
+            SaveDeviceSettingsCommand = new AsyncRelayCommand(SaveDeviceSettingsAsync, () => IsConnected);
+            ShowSupportedDevicesCommand = new AsyncRelayCommand(ShowSupportedDevicesAsync);
+            EditDevicePresetsCommand = new AsyncRelayCommand<StoredDeviceInfo>(EditDevicePresetsAsync);
 
             // Subscribe to device manager events
             deviceManager.DeviceListChanged += OnDeviceListChanged;
             deviceManager.ErrorOccurred += OnErrorOccurred;
+
+            // Load stored devices
+            LoadStoredDevices();
+        }
+
+        /// <summary>
+        /// Loads stored devices from preferences
+        /// </summary>
+        private void LoadStoredDevices()
+        {
+            // For demonstration - in a real app, load from preferences or database
+            StoredDevices.Clear();
+
+            // Add some example devices
+            StoredDevices.Add(new StoredDeviceInfo
+            {
+                Name = "Muse-BAED",
+                DeviceId = "00:55:da:b7:ba:ed",
+                DeviceType = BCIDeviceType.MuseHeadband,
+                LastConnected = DateTime.Now.AddDays(-1)
+            });
+
+            StoredDevices.Add(new StoredDeviceInfo
+            {
+                Name = "Muse-2",
+                DeviceId = "00:55:da:c8:df:12",
+                DeviceType = BCIDeviceType.MuseHeadband,
+                LastConnected = DateTime.Now.AddDays(-7)
+            });
         }
 
         /// <summary>
@@ -191,6 +255,12 @@ namespace NeuroSpectator.PageModels
                         if (verified)
                         {
                             StatusText += " (verified)";
+
+                            // Get device settings
+                            await LoadDeviceSettings(museDevice);
+
+                            // Start battery monitoring
+                            StartBatteryMonitoring();
                         }
                         else
                         {
@@ -200,6 +270,9 @@ namespace NeuroSpectator.PageModels
 
                     IsConnected = true;
                     CanDisconnect = true;
+
+                    // Add or update device in stored devices if not already present
+                    AddOrUpdateStoredDevice(SelectedDevice);
                 }
                 else
                 {
@@ -217,6 +290,110 @@ namespace NeuroSpectator.PageModels
         }
 
         /// <summary>
+        /// Loads device settings from the connected device
+        /// </summary>
+        private async Task LoadDeviceSettings(MuseDevice device)
+        {
+            try
+            {
+                if (device != null)
+                {
+                    var details = device.GetDeviceDetails();
+
+                    // Create a settings model from the device details
+                    CurrentDeviceSettings = new Services.DeviceSettingsModel
+                    {
+                        Name = details.TryGetValue("Name", out var name) ? name : "Unknown",
+                        Model = details.TryGetValue("Model", out var model) ? model : "Unknown",
+                        SerialNumber = details.TryGetValue("Serial", out var serial) ? serial : "Unknown",
+                        Preset = details.TryGetValue("CurrentPreset", out var preset) ? preset : "Unknown",
+                        NotchFilter = details.TryGetValue("NotchFilterEnabled", out var notchFilter) ? notchFilter : "Unknown",
+                        SampleRate = details.TryGetValue("SampleRate", out var sampleRate) ? sampleRate : "Unknown",
+                        EegChannels = details.TryGetValue("EEGChannels", out var eegChannels) ? eegChannels : "Unknown"
+                    };
+
+                    // Get initial battery level
+                    BatteryPercent = await device.GetBatteryLevelAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error loading device settings: {ex.Message}");
+                StatusText = $"Error loading device settings: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// Starts periodic battery level monitoring
+        /// </summary>
+        private void StartBatteryMonitoring()
+        {
+            // Stop existing timer if any
+            batteryUpdateTimer?.Dispose();
+
+            // Create new timer for battery updates
+            batteryUpdateTimer = new Timer(async _ => await UpdateBatteryLevelAsync(),
+                null, BatteryUpdateIntervalMs, BatteryUpdateIntervalMs);
+        }
+
+        /// <summary>
+        /// Updates the battery level from the device
+        /// </summary>
+        private async Task UpdateBatteryLevelAsync()
+        {
+            try
+            {
+                if (deviceManager.CurrentDevice != null && deviceManager.CurrentDevice.IsConnected)
+                {
+                    var level = await deviceManager.CurrentDevice.GetBatteryLevelAsync();
+
+                    // Update on UI thread
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                    {
+                        BatteryPercent = level;
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error updating battery level: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Adds or updates a device in the stored devices collection
+        /// </summary>
+        private void AddOrUpdateStoredDevice(IBCIDeviceInfo deviceInfo)
+        {
+            if (deviceInfo == null) return;
+
+            // Check if device already exists in stored devices
+            var existingDevice = StoredDevices.FirstOrDefault(d => d.DeviceId == deviceInfo.DeviceId);
+
+            if (existingDevice != null)
+            {
+                // Update existing device
+                existingDevice.LastConnected = DateTime.Now;
+            }
+            else
+            {
+                // Add new device
+                var newDevice = new StoredDeviceInfo
+                {
+                    Name = deviceInfo.Name,
+                    DeviceId = deviceInfo.DeviceId,
+                    DeviceType = deviceInfo.DeviceType,
+                    LastConnected = DateTime.Now
+                };
+
+                StoredDevices.Add(newDevice);
+            }
+
+            // In a real app, save to preferences or database
+            // SaveStoredDevices();
+        }
+
+        /// <summary>
         /// Disconnects from the current device with improved handling
         /// </summary>
         private async Task DisconnectAsync()
@@ -225,6 +402,10 @@ namespace NeuroSpectator.PageModels
             {
                 StatusText = "Disconnecting...";
                 CanDisconnect = false;
+
+                // Stop battery monitoring
+                batteryUpdateTimer?.Dispose();
+                batteryUpdateTimer = null;
 
                 // Track time for disconnection process
                 var stopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -237,6 +418,9 @@ namespace NeuroSpectator.PageModels
                 CanConnect = SelectedDevice != null;
                 StatusText = $"Disconnected (took {stopwatch.ElapsedMilliseconds}ms)";
                 DataText = "No data";
+
+                // Reset battery level
+                BatteryPercent = 0;
             }
             catch (Exception ex)
             {
@@ -244,6 +428,54 @@ namespace NeuroSpectator.PageModels
                 CanDisconnect = IsConnected;
                 Debug.WriteLine($"Disconnect error: {ex}");
             }
+        }
+
+        /// <summary>
+        /// Shows the presets dialog for the current device
+        /// </summary>
+        private async Task ShowPresetsAsync()
+        {
+            // Here you would show a dialog or navigate to a presets page
+            await Shell.Current.DisplayAlert("Presets",
+                $"Presets for {CurrentDeviceSettings.Name}\nCurrent preset: {CurrentDeviceSettings.Preset}",
+                "OK");
+        }
+
+        /// <summary>
+        /// Saves the current device settings
+        /// </summary>
+        private async Task SaveDeviceSettingsAsync()
+        {
+            // In a real app, save settings to preferences or database
+            await Shell.Current.DisplayAlert("Settings Saved",
+                $"Settings for {CurrentDeviceSettings.Name} have been saved.",
+                "OK");
+        }
+
+        /// <summary>
+        /// Shows the supported devices dialog
+        /// </summary>
+        private async Task ShowSupportedDevicesAsync()
+        {
+            // In a real app, show a dialog with supported device types
+            await Shell.Current.DisplayAlert("Supported Devices",
+                "Currently supported devices:\n" +
+                "- Muse Headband\n" +
+                "- Mendi Headband (Coming Soon)",
+                "OK");
+        }
+
+        /// <summary>
+        /// Shows the presets dialog for a stored device
+        /// </summary>
+        private async Task EditDevicePresetsAsync(StoredDeviceInfo deviceInfo)
+        {
+            if (deviceInfo == null) return;
+
+            // Here you would show a dialog or navigate to a presets page
+            await Shell.Current.DisplayAlert("Device Presets",
+                $"Edit presets for {deviceInfo.Name}",
+                "OK");
         }
 
         /// <summary>
@@ -286,6 +518,13 @@ namespace NeuroSpectator.PageModels
                     CanConnect = SelectedDevice != null;
                     CanDisconnect = false;
                     DataText = "No data - device disconnected";
+
+                    // Stop battery monitoring
+                    batteryUpdateTimer?.Dispose();
+                    batteryUpdateTimer = null;
+
+                    // Reset battery level
+                    BatteryPercent = 0;
                     break;
 
                 case ConnectionState.Connecting:
@@ -444,5 +683,89 @@ namespace NeuroSpectator.PageModels
             StatusText = $"Device error: {e.Message}";
             Debug.WriteLine($"Device error: {e.Message}, Type: {e.ErrorType}");
         }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
+                    // Dispose managed resources
+                    batteryUpdateTimer?.Dispose();
+                    batteryUpdateTimer = null;
+
+                    // Unsubscribe from events
+                    if (deviceManager != null)
+                    {
+                        deviceManager.DeviceListChanged -= OnDeviceListChanged;
+                        deviceManager.ErrorOccurred -= OnErrorOccurred;
+                    }
+
+                    if (deviceManager?.CurrentDevice != null)
+                    {
+                        var device = deviceManager.CurrentDevice;
+                        device.ConnectionStateChanged -= OnDeviceConnectionStateChanged;
+                        device.BrainWaveDataReceived -= OnBrainWaveDataReceived;
+                        device.ArtifactDetected -= OnArtifactDetected;
+                        device.ErrorOccurred -= OnDeviceErrorOccurred;
+                    }
+                }
+
+                // Dispose unmanaged resources here, if any
+
+                _disposed = true;
+            }
+        }
+    }
+
+    ///// <summary>
+    ///// Model for device settings
+    ///// </summary>
+    //public partial class DeviceSettingsModel : ObservableObject
+    //{
+    //    [ObservableProperty]
+    //    private string name = "Unknown";
+
+    //    [ObservableProperty]
+    //    private string model = "Unknown";
+
+    //    [ObservableProperty]
+    //    private string serialNumber = "Unknown";
+
+    //    [ObservableProperty]
+    //    private string preset = "Unknown";
+
+    //    [ObservableProperty]
+    //    private string notchFilter = "Unknown";
+
+    //    [ObservableProperty]
+    //    private string sampleRate = "Unknown";
+
+    //    [ObservableProperty]
+    //    private string eegChannels = "Unknown";
+    //}
+
+    /// <summary>
+    /// Model for stored device information
+    /// </summary>
+    public partial class StoredDeviceInfo : ObservableObject
+    {
+        [ObservableProperty]
+        private string name;
+
+        [ObservableProperty]
+        private string deviceId;
+
+        [ObservableProperty]
+        private BCIDeviceType deviceType;
+
+        [ObservableProperty]
+        private DateTime lastConnected;
     }
 }

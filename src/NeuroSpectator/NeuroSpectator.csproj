@@ -112,11 +112,13 @@
 		<Folder Include="Services\BCI\Interfaces\" />
 		<Folder Include="Services\BCI\Muse\Platform\" />
 		<Folder Include="Utilities\" />
-		<Folder Include="PageModels\" />
 		<Folder Include="Resources\Raw\Debug_x64\" />
 		<Folder Include="Resources\Raw\Release_x64\" />
 	</ItemGroup>
 	<ItemGroup>
+		<MauiXaml Update="Pages\DevicePresetsPage.xaml">
+		  <Generator>MSBuild:Compile</Generator>
+		</MauiXaml>
 		<MauiXaml Update="Pages\YourDevicesPage.xaml">
 			<Generator>MSBuild:Compile</Generator>
 		</MauiXaml>
