@@ -16,9 +16,6 @@ using Microsoft.Maui.Dispatching;
 
 namespace NeuroSpectator.PageModels
 {
-    /// <summary>
-    /// View model for the YourDevicesPage
-    /// </summary>
     public partial class YourDevicesPageModel : ObservableObject, IDisposable
     {
         private readonly IBCIDeviceManager deviceManager;
@@ -36,13 +33,17 @@ namespace NeuroSpectator.PageModels
         private bool isScanning;
 
         [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(IsNotConnecting))]
+        private bool isConnecting;
+
+        [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(IsNotConnected))]
         [NotifyPropertyChangedFor(nameof(DevicePanelTitle))]
         private bool isConnected;
 
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(IsNotConnected))]
-        private bool canInitialize = false; // Default to false since initialization is automatic
+        private bool canInitialize = false;
 
         [ObservableProperty]
         private bool canScan;
@@ -78,6 +79,7 @@ namespace NeuroSpectator.PageModels
 
         // Derived Properties
         public bool IsNotConnected => !IsConnected;
+        public bool IsNotConnecting => !IsConnecting;
         public double BatteryArcAngle => 360 * (BatteryPercent / 100.0);
         public string BatteryPercentText => $"{BatteryPercent:F0}%";
         public bool BatteryPercentIsLargeArc => BatteryPercent > 50;
@@ -99,16 +101,13 @@ namespace NeuroSpectator.PageModels
         public ICommand ShowSupportedDevicesCommand { get; }
         public ICommand EditDevicePresetsCommand { get; }
 
-        /// <summary>
-        /// Creates a new instance of the YourDevicesPageModel class
-        /// </summary>
         public YourDevicesPageModel(IBCIDeviceManager deviceManager)
         {
             this.deviceManager = deviceManager ?? throw new ArgumentNullException(nameof(deviceManager));
 
             // Initialize commands
             ScanCommand = new AsyncRelayCommand(ToggleScanAsync, () => CanScan);
-            ConnectCommand = new AsyncRelayCommand(ConnectAsync, () => CanConnect);
+            ConnectCommand = new AsyncRelayCommand<IBCIDeviceInfo>(ConnectToDeviceAsync);
             DisconnectCommand = new AsyncRelayCommand(DisconnectAsync, () => CanDisconnect);
             ShowPresetsCommand = new AsyncRelayCommand(ShowPresetsAsync, () => IsConnected);
             SaveDeviceSettingsCommand = new AsyncRelayCommand(SaveDeviceSettingsAsync, () => IsConnected);
@@ -122,7 +121,7 @@ namespace NeuroSpectator.PageModels
             // Load stored devices
             LoadStoredDevices();
 
-            // Create the scan timeout timer (but don't start it yet)
+            // Create the scan timeout timer
             scanTimeoutTimer = Application.Current.Dispatcher.CreateTimer();
             scanTimeoutTimer.Interval = TimeSpan.FromMilliseconds(ScanTimeoutMs);
             scanTimeoutTimer.Tick += async (s, e) =>
@@ -135,15 +134,10 @@ namespace NeuroSpectator.PageModels
             };
         }
 
-        /// <summary>
-        /// Loads stored devices from preferences
-        /// </summary>
         private void LoadStoredDevices()
         {
-            // For demonstration - in a real app, load from preferences or database
             StoredDevices.Clear();
 
-            // Add some example devices
             StoredDevices.Add(new StoredDeviceInfo
             {
                 Name = "Muse-BAED",
@@ -161,10 +155,6 @@ namespace NeuroSpectator.PageModels
             });
         }
 
-        /// <summary>
-        /// Initializes the device manager and sets up event handlers
-        /// This happens automatically when the page appears
-        /// </summary>
         private async Task InitializeAsync()
         {
             try
@@ -173,11 +163,7 @@ namespace NeuroSpectator.PageModels
                     return;
 
                 StatusText = "Initializing...";
-
-                // Small delay to avoid UI freezing
                 await Task.Delay(100);
-
-                // Set initialized flag
                 IsInitialized = true;
                 CanScan = true;
                 StatusText = "Ready to scan for devices.";
@@ -189,9 +175,6 @@ namespace NeuroSpectator.PageModels
             }
         }
 
-        /// <summary>
-        /// Starts scanning for devices
-        /// </summary>
         private async Task StartScanAsync()
         {
             try
@@ -203,7 +186,18 @@ namespace NeuroSpectator.PageModels
                 IsScanning = true;
                 await deviceManager.StartScanningAsync();
 
-                // Start the timeout timer
+                // Reset and start the timeout timer
+                scanTimeoutTimer?.Stop();
+                scanTimeoutTimer = Application.Current.Dispatcher.CreateTimer();
+                scanTimeoutTimer.Interval = TimeSpan.FromMilliseconds(ScanTimeoutMs);
+                scanTimeoutTimer.Tick += async (s, e) =>
+                {
+                    if (IsScanning && AvailableDevices.Count == 0)
+                    {
+                        await StopScanAsync();
+                        StatusText = "No devices found. Tap 'Scan for Devices' to try again.";
+                    }
+                };
                 scanTimeoutTimer.Start();
             }
             catch (Exception ex)
@@ -214,9 +208,6 @@ namespace NeuroSpectator.PageModels
             }
         }
 
-        /// <summary>
-        /// Stops scanning for devices
-        /// </summary>
         private async Task StopScanAsync()
         {
             try
@@ -224,9 +215,7 @@ namespace NeuroSpectator.PageModels
                 if (!IsScanning)
                     return;
 
-                // Stop the timeout timer
                 scanTimeoutTimer.Stop();
-
                 await deviceManager.StopScanningAsync();
                 IsScanning = false;
                 StatusText = "Scan stopped";
@@ -238,9 +227,6 @@ namespace NeuroSpectator.PageModels
             }
         }
 
-        /// <summary>
-        /// Initialize when page appears
-        /// </summary>
         public async Task OnAppearingAsync()
         {
             try
@@ -250,7 +236,6 @@ namespace NeuroSpectator.PageModels
                     await InitializeAsync();
                 }
 
-                // Start scanning automatically if no device is connected
                 if (!IsConnected && !IsScanning && CanScan)
                 {
                     await StartScanAsync();
@@ -263,29 +248,30 @@ namespace NeuroSpectator.PageModels
             }
         }
 
-        /// <summary>
-        /// Connects to the selected device with improved error handling
-        /// </summary>
         private async Task ConnectAsync()
         {
-            if (SelectedDevice == null) return;
-
             try
             {
-                StatusText = $"Connecting to {SelectedDevice.Name}...";
-                CanConnect = false;
-                CanDisconnect = false; // Disable disconnect while connecting
+                if (SelectedDevice == null)
+                {
+                    Debug.WriteLine("No device selected for connection");
+                    return;
+                }
 
-                // Stop scanning first to avoid interference
+                Debug.WriteLine($"Attempting to connect to device: {SelectedDevice.Name} (ID: {SelectedDevice.DeviceId})");
+
+                StatusText = $"Connecting to {SelectedDevice.Name}...";
+                IsConnecting = true;
+                CanConnect = false;
+                CanDisconnect = false;
+
                 if (IsScanning)
                 {
                     await StopScanAsync();
                 }
 
-                // Track time for connection process
                 var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-                // Attempt to connect
                 IBCIDevice device = await deviceManager.ConnectToDeviceAsync(SelectedDevice);
 
                 if (device != null)
@@ -293,40 +279,39 @@ namespace NeuroSpectator.PageModels
                     stopwatch.Stop();
                     DataText = $"Connection established in {stopwatch.ElapsedMilliseconds}ms";
                     StatusText = $"Connected to {SelectedDevice.Name}";
+                    Debug.WriteLine($"Successfully connected to {SelectedDevice.Name} in {stopwatch.ElapsedMilliseconds}ms");
 
-                    // Subscribe to device events
                     device.ConnectionStateChanged += OnDeviceConnectionStateChanged;
                     device.BrainWaveDataReceived += OnBrainWaveDataReceived;
                     device.ArtifactDetected += OnArtifactDetected;
                     device.ErrorOccurred += OnDeviceErrorOccurred;
 
-                    // Ensure we get all brain wave data
                     device.RegisterForBrainWaveData(BrainWaveTypes.All);
 
-                    // Verify connection
                     if (device is MuseDevice museDevice)
                     {
                         var verified = await museDevice.VerifyConnectionAsync();
                         if (verified)
                         {
                             StatusText += " (verified)";
-
-                            // Get device settings
+                            Debug.WriteLine("Connection verified successfully");
                             await LoadDeviceSettings(museDevice);
-
-                            // Start battery monitoring
                             StartBatteryMonitoring();
                         }
                         else
                         {
                             StatusText += " (not verified - check device)";
+                            Debug.WriteLine("Connection verification failed");
                         }
                     }
 
                     IsConnected = true;
                     CanDisconnect = true;
 
-                    // Add or update device in stored devices if not already present
+                    OnPropertyChanged(nameof(IsConnected));
+                    OnPropertyChanged(nameof(IsNotConnected));
+                    OnPropertyChanged(nameof(DevicePanelTitle));
+
                     AddOrUpdateStoredDevice(SelectedDevice);
                 }
                 else
@@ -334,19 +319,38 @@ namespace NeuroSpectator.PageModels
                     stopwatch.Stop();
                     StatusText = $"Connection failed after {stopwatch.ElapsedMilliseconds}ms";
                     CanConnect = true;
+                    Debug.WriteLine($"Connection failed after {stopwatch.ElapsedMilliseconds}ms - device is null");
                 }
             }
             catch (Exception ex)
             {
                 StatusText = $"Connection error: {ex.Message}";
                 CanConnect = SelectedDevice != null;
-                Debug.WriteLine($"Connection error: {ex}");
+                Debug.WriteLine($"Connection error: {ex.Message}");
+                Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+            }
+            finally
+            {
+                IsConnecting = false;
             }
         }
 
-        /// <summary>
-        /// Loads device settings from the connected device
-        /// </summary>
+        private async Task ConnectToDeviceAsync(IBCIDeviceInfo device)
+        {
+            if (device == null)
+            {
+                Debug.WriteLine("No device provided to connect");
+                return;
+            }
+
+            // Set selected device first
+            SelectedDevice = device;
+            Debug.WriteLine($"Device selected: {device.Name}");
+
+            // Then connect
+            await ConnectAsync();
+        }
+
         private async Task LoadDeviceSettings(MuseDevice device)
         {
             try
@@ -355,7 +359,6 @@ namespace NeuroSpectator.PageModels
                 {
                     var details = device.GetDeviceDetails();
 
-                    // Create a settings model from the device details
                     CurrentDeviceSettings = new Services.DeviceSettingsModel
                     {
                         Name = details.TryGetValue("Name", out var name) ? name : "Unknown",
@@ -367,7 +370,6 @@ namespace NeuroSpectator.PageModels
                         EegChannels = details.TryGetValue("EEGChannels", out var eegChannels) ? eegChannels : "Unknown"
                     };
 
-                    // Get initial battery level
                     BatteryPercent = await device.GetBatteryLevelAsync();
                 }
             }
@@ -378,20 +380,15 @@ namespace NeuroSpectator.PageModels
             }
         }
 
-        /// <summary>
-        /// Starts periodic battery level monitoring
-        /// </summary>
         private void StartBatteryMonitoring()
         {
             try
             {
-                // Stop existing timer if any
                 if (batteryUpdateTimer != null)
                 {
                     batteryUpdateTimer.Stop();
                 }
 
-                // Create new timer for battery updates
                 batteryUpdateTimer = Application.Current.Dispatcher.CreateTimer();
                 batteryUpdateTimer.Interval = TimeSpan.FromMilliseconds(BatteryUpdateIntervalMs);
                 batteryUpdateTimer.Tick += async (s, e) =>
@@ -413,9 +410,6 @@ namespace NeuroSpectator.PageModels
             }
         }
 
-        /// <summary>
-        /// Updates the battery level from the device
-        /// </summary>
         private async Task UpdateBatteryLevelAsync()
         {
             try
@@ -424,7 +418,6 @@ namespace NeuroSpectator.PageModels
                 {
                     var level = await deviceManager.CurrentDevice.GetBatteryLevelAsync();
 
-                    // Update on UI thread
                     await MainThread.InvokeOnMainThreadAsync(() =>
                     {
                         BatteryPercent = level;
@@ -437,24 +430,18 @@ namespace NeuroSpectator.PageModels
             }
         }
 
-        /// <summary>
-        /// Adds or updates a device in the stored devices collection
-        /// </summary>
         private void AddOrUpdateStoredDevice(IBCIDeviceInfo deviceInfo)
         {
             if (deviceInfo == null) return;
 
-            // Check if device already exists in stored devices
             var existingDevice = StoredDevices.FirstOrDefault(d => d.DeviceId == deviceInfo.DeviceId);
 
             if (existingDevice != null)
             {
-                // Update existing device
                 existingDevice.LastConnected = DateTime.Now;
             }
             else
             {
-                // Add new device
                 var newDevice = new StoredDeviceInfo
                 {
                     Name = deviceInfo.Name,
@@ -465,14 +452,8 @@ namespace NeuroSpectator.PageModels
 
                 StoredDevices.Add(newDevice);
             }
-
-            // In a real app, save to preferences or database
-            // SaveStoredDevices();
         }
 
-        /// <summary>
-        /// Disconnects from the current device with improved handling
-        /// </summary>
         private async Task DisconnectAsync()
         {
             try
@@ -480,10 +461,8 @@ namespace NeuroSpectator.PageModels
                 StatusText = "Disconnecting...";
                 CanDisconnect = false;
 
-                // Log the disconnection attempt
                 Debug.WriteLine("DisconnectAsync called, attempting to disconnect from current device");
 
-                // Stop battery monitoring
                 if (batteryUpdateTimer != null)
                 {
                     Debug.WriteLine("Stopping battery update timer");
@@ -491,10 +470,8 @@ namespace NeuroSpectator.PageModels
                     batteryUpdateTimer = null;
                 }
 
-                // Track time for disconnection process
                 var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-                // Log current device status before disconnection
                 if (deviceManager.CurrentDevice != null)
                 {
                     Debug.WriteLine($"Current device before disconnect: {deviceManager.CurrentDevice.Name}, IsConnected: {deviceManager.CurrentDevice.IsConnected}");
@@ -504,7 +481,6 @@ namespace NeuroSpectator.PageModels
                     Debug.WriteLine("No current device found in device manager");
                 }
 
-                // Force manual device disconnection
                 if (deviceManager.CurrentDevice is MuseDevice museDevice)
                 {
                     Debug.WriteLine("Found Muse device, calling specific disconnect");
@@ -518,16 +494,13 @@ namespace NeuroSpectator.PageModels
 
                 stopwatch.Stop();
 
-                // Update the UI state
                 IsConnected = false;
                 CanConnect = SelectedDevice != null;
                 StatusText = $"Disconnected (took {stopwatch.ElapsedMilliseconds}ms)";
                 DataText = "No data";
 
-                // Reset battery level
                 BatteryPercent = 0;
 
-                // Force property change notifications
                 OnPropertyChanged(nameof(IsConnected));
                 OnPropertyChanged(nameof(IsNotConnected));
                 OnPropertyChanged(nameof(DevicePanelTitle));
@@ -541,41 +514,28 @@ namespace NeuroSpectator.PageModels
                 Debug.WriteLine($"Disconnect error: {ex.Message}");
                 Debug.WriteLine($"Stack trace: {ex.StackTrace}");
 
-                // Force disconnect UI state in case of error
                 IsConnected = false;
                 OnPropertyChanged(nameof(IsConnected));
                 OnPropertyChanged(nameof(IsNotConnected));
             }
         }
 
-        /// <summary>
-        /// Shows the presets dialog for the current device
-        /// </summary>
         private async Task ShowPresetsAsync()
         {
-            // Here you would show a dialog or navigate to a presets page
             await Shell.Current.DisplayAlert("Presets",
                 $"Presets for {CurrentDeviceSettings.Name}\nCurrent preset: {CurrentDeviceSettings.Preset}",
                 "OK");
         }
 
-        /// <summary>
-        /// Saves the current device settings
-        /// </summary>
         private async Task SaveDeviceSettingsAsync()
         {
-            // In a real app, save settings to preferences or database
             await Shell.Current.DisplayAlert("Settings Saved",
                 $"Settings for {CurrentDeviceSettings.Name} have been saved.",
                 "OK");
         }
 
-        /// <summary>
-        /// Shows the supported devices dialog
-        /// </summary>
         private async Task ShowSupportedDevicesAsync()
         {
-            // In a real app, show a dialog with supported device types
             await Shell.Current.DisplayAlert("Supported Devices",
                 "Currently supported devices:\n" +
                 "- Muse Headband\n" +
@@ -583,22 +543,15 @@ namespace NeuroSpectator.PageModels
                 "OK");
         }
 
-        /// <summary>
-        /// Shows the presets dialog for a stored device
-        /// </summary>
         private async Task EditDevicePresetsAsync(StoredDeviceInfo deviceInfo)
         {
             if (deviceInfo == null) return;
 
-            // Here you would show a dialog or navigate to a presets page
             await Shell.Current.DisplayAlert("Device Presets",
                 $"Edit presets for {deviceInfo.Name}",
                 "OK");
         }
 
-        /// <summary>
-        /// Toggles scanning state
-        /// </summary>
         private async Task ToggleScanAsync()
         {
             try
@@ -619,31 +572,43 @@ namespace NeuroSpectator.PageModels
             }
         }
 
-
-        /// <summary>
-        /// Handles the DeviceListChanged event
-        /// </summary>
         private void OnDeviceListChanged(object sender, System.Collections.Generic.List<IBCIDeviceInfo> devices)
         {
-            StatusText = $"Found {devices.Count} device(s)";
-
-            // If we have devices and none is selected, select the first one
-            if (SelectedDevice == null && devices.Any())
+            try
             {
-                SelectedDevice = devices.First();
-            }
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    if (devices.Count > 0)
+                    {
+                        StatusText = $"Found {devices.Count} device(s)";
+                        Debug.WriteLine($"DeviceListChanged: Found {devices.Count} device(s)");
 
-            CanConnect = SelectedDevice != null && !IsConnected;
+                        foreach (var device in devices)
+                        {
+                            Debug.WriteLine($"  > Device: {device.Name} (ID: {device.DeviceId}, Signal: {device.SignalStrength})");
+                        }
+                    }
+                    else
+                    {
+                        StatusText = "No devices found";
+                        Debug.WriteLine("DeviceListChanged: No devices found");
+                    }
+
+                    CanConnect = SelectedDevice != null && !IsConnected;
+                    OnPropertyChanged(nameof(AvailableDevices));
+                });
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error in OnDeviceListChanged: {ex.Message}");
+                StatusText = "Error updating device list";
+            }
         }
 
-        /// <summary>
-        /// Handles the ConnectionStateChanged event with improved diagnostics
-        /// </summary>
         private void OnDeviceConnectionStateChanged(object sender, ConnectionStateChangedEventArgs e)
         {
             StatusText = $"Connection state: {e.NewState}";
 
-            // Log transition for debugging
             Debug.WriteLine($"Connection transition: {e.OldState} -> {e.NewState}");
 
             switch (e.NewState)
@@ -661,11 +626,9 @@ namespace NeuroSpectator.PageModels
                     CanDisconnect = false;
                     DataText = "No data - device disconnected";
 
-                    // Stop battery monitoring
                     batteryUpdateTimer?.Stop();
                     batteryUpdateTimer = null;
 
-                    // Reset battery level
                     BatteryPercent = 0;
                     break;
 
@@ -691,14 +654,10 @@ namespace NeuroSpectator.PageModels
             }
         }
 
-        /// <summary>
-        /// Improved brain wave data handler with robust error handling
-        /// </summary>
         private void OnBrainWaveDataReceived(object sender, BrainWaveDataEventArgs e)
         {
             try
             {
-                // Basic validation
                 if (e?.BrainWaveData == null)
                 {
                     DataText = "Received invalid data packet";
@@ -707,7 +666,6 @@ namespace NeuroSpectator.PageModels
 
                 var waveType = e.BrainWaveData.WaveType;
 
-                // Handle different wave types
                 switch (waveType)
                 {
                     case BrainWaveTypes.Alpha:
@@ -731,12 +689,10 @@ namespace NeuroSpectator.PageModels
                         break;
 
                     case BrainWaveTypes.Raw:
-                        // Safer handling of raw EEG data
                         try
                         {
                             if (e.BrainWaveData.ChannelValues != null && e.BrainWaveData.ChannelValues.Length > 0)
                             {
-                                // Check for invalid values
                                 bool hasInvalidValues = false;
                                 foreach (var value in e.BrainWaveData.ChannelValues)
                                 {
@@ -753,7 +709,6 @@ namespace NeuroSpectator.PageModels
                                 }
                                 else
                                 {
-                                    // Safe min/max calculation
                                     double min = double.MaxValue;
                                     double max = double.MinValue;
 
@@ -763,7 +718,6 @@ namespace NeuroSpectator.PageModels
                                         if (value > max) max = value;
                                     }
 
-                                    // Only use min/max if we found valid values
                                     if (min != double.MaxValue && max != double.MinValue)
                                     {
                                         DataText = $"EEG: {e.BrainWaveData.ChannelCount} channels, range: {min:F1} to {max:F1}";
@@ -781,7 +735,6 @@ namespace NeuroSpectator.PageModels
                         }
                         catch (Exception ex)
                         {
-                            // Fallback for any errors in raw data processing
                             Debug.WriteLine($"Error processing raw EEG data: {ex.Message}");
                             DataText = "EEG: Error processing data";
                         }
@@ -794,32 +747,22 @@ namespace NeuroSpectator.PageModels
             }
             catch (Exception ex)
             {
-                // Top-level exception handler
                 Debug.WriteLine($"Error in OnBrainWaveDataReceived: {ex.Message}");
                 DataText = "Error processing brain wave data";
             }
         }
 
-        /// <summary>
-        /// Handles the ArtifactDetected event
-        /// </summary>
         private void OnArtifactDetected(object sender, ArtifactEventArgs e)
         {
             DataText = $"Artifacts: Blink={e.Blink}, Jaw Clench={e.JawClench}, Headband Loose={e.HeadbandTooLoose}";
         }
 
-        /// <summary>
-        /// Handles the ErrorOccurred event from the device manager
-        /// </summary>
         private void OnErrorOccurred(object sender, BCIErrorEventArgs e)
         {
             StatusText = $"Error: {e.Message}";
             Debug.WriteLine($"Device manager error: {e.Message}, Type: {e.ErrorType}");
         }
 
-        /// <summary>
-        /// Handles the ErrorOccurred event from the device
-        /// </summary>
         private void OnDeviceErrorOccurred(object sender, BCIErrorEventArgs e)
         {
             StatusText = $"Device error: {e.Message}";
@@ -838,7 +781,6 @@ namespace NeuroSpectator.PageModels
             {
                 if (disposing)
                 {
-                    // Dispose managed resources
                     if (batteryUpdateTimer != null)
                     {
                         batteryUpdateTimer.Stop();
@@ -851,7 +793,6 @@ namespace NeuroSpectator.PageModels
                         scanTimeoutTimer = null;
                     }
 
-                    // Unsubscribe from events
                     if (deviceManager != null)
                     {
                         deviceManager.DeviceListChanged -= OnDeviceListChanged;
@@ -873,9 +814,6 @@ namespace NeuroSpectator.PageModels
         }
     }
 
-    /// <summary>
-    /// Model for stored device information
-    /// </summary>
     public partial class StoredDeviceInfo : ObservableObject
     {
         [ObservableProperty]
