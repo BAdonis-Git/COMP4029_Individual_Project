@@ -57,6 +57,7 @@
 
 	<!-- NuGet Package References -->
 	<ItemGroup>
+		<PackageReference Include="CommunityToolkit.Maui" Version="9.1.1" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
 		<PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="$(MauiVersion)" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.1" />
@@ -111,7 +112,6 @@
 		<Folder Include="Services\BCI\Factory\" />
 		<Folder Include="Services\BCI\Interfaces\" />
 		<Folder Include="Services\BCI\Muse\Platform\" />
-		<Folder Include="Utilities\" />
 		<Folder Include="Resources\Raw\Debug_x64\" />
 		<Folder Include="Resources\Raw\Release_x64\" />
 	</ItemGroup>

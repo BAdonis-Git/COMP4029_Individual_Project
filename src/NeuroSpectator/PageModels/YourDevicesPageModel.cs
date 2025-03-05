@@ -12,6 +12,7 @@ using NeuroSpectator.Services;
 using NeuroSpectator.Services.BCI.Interfaces;
 using NeuroSpectator.Services.BCI.Muse;
 using ConnectionState = NeuroSpectator.Models.BCI.Common.ConnectionState;
+using Microsoft.Maui.Dispatching;
 
 namespace NeuroSpectator.PageModels
 {
@@ -21,22 +22,27 @@ namespace NeuroSpectator.PageModels
     public partial class YourDevicesPageModel : ObservableObject, IDisposable
     {
         private readonly IBCIDeviceManager deviceManager;
-        private Timer batteryUpdateTimer;
+        private IDispatcherTimer batteryUpdateTimer;
+        private IDispatcherTimer scanTimeoutTimer;
         private const int BatteryUpdateIntervalMs = 10000; // 10 seconds
+        private const int ScanTimeoutMs = 15000; // 15 seconds
         private bool _disposed = false; // Track whether Dispose has been called
 
         [ObservableProperty]
         private bool isInitialized;
 
         [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(ScanButtonText))]
         private bool isScanning;
 
         [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(IsNotConnected))]
+        [NotifyPropertyChangedFor(nameof(DevicePanelTitle))]
         private bool isConnected;
 
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(IsNotConnected))]
-        private bool canInitialize = true;
+        private bool canInitialize = false; // Default to false since initialization is automatic
 
         [ObservableProperty]
         private bool canScan;
@@ -48,7 +54,7 @@ namespace NeuroSpectator.PageModels
         private bool canDisconnect;
 
         [ObservableProperty]
-        private string statusText = "Not initialized";
+        private string statusText = "Initializing...";
 
         [ObservableProperty]
         private string dataText = "No data";
@@ -75,6 +81,8 @@ namespace NeuroSpectator.PageModels
         public double BatteryArcAngle => 360 * (BatteryPercent / 100.0);
         public string BatteryPercentText => $"{BatteryPercent:F0}%";
         public bool BatteryPercentIsLargeArc => BatteryPercent > 50;
+        public string DevicePanelTitle => IsConnected ? "Connected Device" : "Available Devices";
+        public string ScanButtonText => IsScanning ? "Scanning..." : "Scan for Devices";
 
         // Collections
         public ObservableCollection<IBCIDeviceInfo> AvailableDevices => deviceManager.AvailableDevices;
@@ -83,9 +91,7 @@ namespace NeuroSpectator.PageModels
         private ObservableCollection<StoredDeviceInfo> storedDevices = new ObservableCollection<StoredDeviceInfo>();
 
         // Commands
-        public ICommand InitializeCommand { get; }
-        public ICommand StartScanCommand { get; }
-        public ICommand StopScanCommand { get; }
+        public ICommand ScanCommand { get; }
         public ICommand ConnectCommand { get; }
         public ICommand DisconnectCommand { get; }
         public ICommand ShowPresetsCommand { get; }
@@ -101,9 +107,7 @@ namespace NeuroSpectator.PageModels
             this.deviceManager = deviceManager ?? throw new ArgumentNullException(nameof(deviceManager));
 
             // Initialize commands
-            InitializeCommand = new AsyncRelayCommand(InitializeAsync);
-            StartScanCommand = new AsyncRelayCommand(StartScanAsync, () => CanScan && !IsScanning);
-            StopScanCommand = new AsyncRelayCommand(StopScanAsync, () => IsScanning);
+            ScanCommand = new AsyncRelayCommand(ToggleScanAsync, () => CanScan);
             ConnectCommand = new AsyncRelayCommand(ConnectAsync, () => CanConnect);
             DisconnectCommand = new AsyncRelayCommand(DisconnectAsync, () => CanDisconnect);
             ShowPresetsCommand = new AsyncRelayCommand(ShowPresetsAsync, () => IsConnected);
@@ -117,6 +121,18 @@ namespace NeuroSpectator.PageModels
 
             // Load stored devices
             LoadStoredDevices();
+
+            // Create the scan timeout timer (but don't start it yet)
+            scanTimeoutTimer = Application.Current.Dispatcher.CreateTimer();
+            scanTimeoutTimer.Interval = TimeSpan.FromMilliseconds(ScanTimeoutMs);
+            scanTimeoutTimer.Tick += async (s, e) =>
+            {
+                if (IsScanning && AvailableDevices.Count == 0)
+                {
+                    await StopScanAsync();
+                    StatusText = "No devices found. Tap 'Scan for Devices' to try again.";
+                }
+            };
         }
 
         /// <summary>
@@ -147,26 +163,28 @@ namespace NeuroSpectator.PageModels
 
         /// <summary>
         /// Initializes the device manager and sets up event handlers
+        /// This happens automatically when the page appears
         /// </summary>
         private async Task InitializeAsync()
         {
             try
             {
-                CanInitialize = false;
+                if (IsInitialized)
+                    return;
+
                 StatusText = "Initializing...";
 
-                // Wait a bit for the UI to update
+                // Small delay to avoid UI freezing
                 await Task.Delay(100);
 
                 // Set initialized flag
                 IsInitialized = true;
                 CanScan = true;
-                StatusText = "Initialized successfully. Ready to scan for devices.";
+                StatusText = "Ready to scan for devices.";
             }
             catch (Exception ex)
             {
                 StatusText = $"Initialization error: {ex.Message}";
-                CanInitialize = true;
                 Debug.WriteLine($"Initialization error: {ex}");
             }
         }
@@ -178,9 +196,15 @@ namespace NeuroSpectator.PageModels
         {
             try
             {
+                if (IsScanning)
+                    return;
+
                 StatusText = "Scanning for devices...";
                 IsScanning = true;
                 await deviceManager.StartScanningAsync();
+
+                // Start the timeout timer
+                scanTimeoutTimer.Start();
             }
             catch (Exception ex)
             {
@@ -197,6 +221,12 @@ namespace NeuroSpectator.PageModels
         {
             try
             {
+                if (!IsScanning)
+                    return;
+
+                // Stop the timeout timer
+                scanTimeoutTimer.Stop();
+
                 await deviceManager.StopScanningAsync();
                 IsScanning = false;
                 StatusText = "Scan stopped";
@@ -205,6 +235,31 @@ namespace NeuroSpectator.PageModels
             {
                 StatusText = $"Error stopping scan: {ex.Message}";
                 Debug.WriteLine($"Error stopping scan: {ex}");
+            }
+        }
+
+        /// <summary>
+        /// Initialize when page appears
+        /// </summary>
+        public async Task OnAppearingAsync()
+        {
+            try
+            {
+                if (!IsInitialized)
+                {
+                    await InitializeAsync();
+                }
+
+                // Start scanning automatically if no device is connected
+                if (!IsConnected && !IsScanning && CanScan)
+                {
+                    await StartScanAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"Error during page initialization: {ex.Message}";
+                Debug.WriteLine($"Error in OnAppearingAsync: {ex}");
             }
         }
 
@@ -328,12 +383,34 @@ namespace NeuroSpectator.PageModels
         /// </summary>
         private void StartBatteryMonitoring()
         {
-            // Stop existing timer if any
-            batteryUpdateTimer?.Dispose();
+            try
+            {
+                // Stop existing timer if any
+                if (batteryUpdateTimer != null)
+                {
+                    batteryUpdateTimer.Stop();
+                }
 
-            // Create new timer for battery updates
-            batteryUpdateTimer = new Timer(async _ => await UpdateBatteryLevelAsync(),
-                null, BatteryUpdateIntervalMs, BatteryUpdateIntervalMs);
+                // Create new timer for battery updates
+                batteryUpdateTimer = Application.Current.Dispatcher.CreateTimer();
+                batteryUpdateTimer.Interval = TimeSpan.FromMilliseconds(BatteryUpdateIntervalMs);
+                batteryUpdateTimer.Tick += async (s, e) =>
+                {
+                    try
+                    {
+                        await UpdateBatteryLevelAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Error in battery update timer: {ex.Message}");
+                    }
+                };
+                batteryUpdateTimer.Start();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error starting battery monitoring: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -403,17 +480,45 @@ namespace NeuroSpectator.PageModels
                 StatusText = "Disconnecting...";
                 CanDisconnect = false;
 
+                // Log the disconnection attempt
+                Debug.WriteLine("DisconnectAsync called, attempting to disconnect from current device");
+
                 // Stop battery monitoring
-                batteryUpdateTimer?.Dispose();
-                batteryUpdateTimer = null;
+                if (batteryUpdateTimer != null)
+                {
+                    Debug.WriteLine("Stopping battery update timer");
+                    batteryUpdateTimer.Stop();
+                    batteryUpdateTimer = null;
+                }
 
                 // Track time for disconnection process
                 var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-                await deviceManager.DisconnectCurrentDeviceAsync();
+                // Log current device status before disconnection
+                if (deviceManager.CurrentDevice != null)
+                {
+                    Debug.WriteLine($"Current device before disconnect: {deviceManager.CurrentDevice.Name}, IsConnected: {deviceManager.CurrentDevice.IsConnected}");
+                }
+                else
+                {
+                    Debug.WriteLine("No current device found in device manager");
+                }
+
+                // Force manual device disconnection
+                if (deviceManager.CurrentDevice is MuseDevice museDevice)
+                {
+                    Debug.WriteLine("Found Muse device, calling specific disconnect");
+                    await museDevice.DisconnectAsync();
+                }
+                else
+                {
+                    Debug.WriteLine("Using device manager to disconnect");
+                    await deviceManager.DisconnectCurrentDeviceAsync();
+                }
 
                 stopwatch.Stop();
 
+                // Update the UI state
                 IsConnected = false;
                 CanConnect = SelectedDevice != null;
                 StatusText = $"Disconnected (took {stopwatch.ElapsedMilliseconds}ms)";
@@ -421,12 +526,25 @@ namespace NeuroSpectator.PageModels
 
                 // Reset battery level
                 BatteryPercent = 0;
+
+                // Force property change notifications
+                OnPropertyChanged(nameof(IsConnected));
+                OnPropertyChanged(nameof(IsNotConnected));
+                OnPropertyChanged(nameof(DevicePanelTitle));
+
+                Debug.WriteLine("Disconnect completed successfully");
             }
             catch (Exception ex)
             {
                 StatusText = $"Disconnect error: {ex.Message}";
                 CanDisconnect = IsConnected;
-                Debug.WriteLine($"Disconnect error: {ex}");
+                Debug.WriteLine($"Disconnect error: {ex.Message}");
+                Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+
+                // Force disconnect UI state in case of error
+                IsConnected = false;
+                OnPropertyChanged(nameof(IsConnected));
+                OnPropertyChanged(nameof(IsNotConnected));
             }
         }
 
@@ -479,6 +597,30 @@ namespace NeuroSpectator.PageModels
         }
 
         /// <summary>
+        /// Toggles scanning state
+        /// </summary>
+        private async Task ToggleScanAsync()
+        {
+            try
+            {
+                if (IsScanning)
+                {
+                    await StopScanAsync();
+                }
+                else
+                {
+                    await StartScanAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"Error toggling scan: {ex.Message}";
+                Debug.WriteLine($"Error in ToggleScanAsync: {ex}");
+            }
+        }
+
+
+        /// <summary>
         /// Handles the DeviceListChanged event
         /// </summary>
         private void OnDeviceListChanged(object sender, System.Collections.Generic.List<IBCIDeviceInfo> devices)
@@ -520,7 +662,7 @@ namespace NeuroSpectator.PageModels
                     DataText = "No data - device disconnected";
 
                     // Stop battery monitoring
-                    batteryUpdateTimer?.Dispose();
+                    batteryUpdateTimer?.Stop();
                     batteryUpdateTimer = null;
 
                     // Reset battery level
@@ -697,8 +839,17 @@ namespace NeuroSpectator.PageModels
                 if (disposing)
                 {
                     // Dispose managed resources
-                    batteryUpdateTimer?.Dispose();
-                    batteryUpdateTimer = null;
+                    if (batteryUpdateTimer != null)
+                    {
+                        batteryUpdateTimer.Stop();
+                        batteryUpdateTimer = null;
+                    }
+
+                    if (scanTimeoutTimer != null)
+                    {
+                        scanTimeoutTimer.Stop();
+                        scanTimeoutTimer = null;
+                    }
 
                     // Unsubscribe from events
                     if (deviceManager != null)
@@ -717,39 +868,10 @@ namespace NeuroSpectator.PageModels
                     }
                 }
 
-                // Dispose unmanaged resources here, if any
-
                 _disposed = true;
             }
         }
     }
-
-    ///// <summary>
-    ///// Model for device settings
-    ///// </summary>
-    //public partial class DeviceSettingsModel : ObservableObject
-    //{
-    //    [ObservableProperty]
-    //    private string name = "Unknown";
-
-    //    [ObservableProperty]
-    //    private string model = "Unknown";
-
-    //    [ObservableProperty]
-    //    private string serialNumber = "Unknown";
-
-    //    [ObservableProperty]
-    //    private string preset = "Unknown";
-
-    //    [ObservableProperty]
-    //    private string notchFilter = "Unknown";
-
-    //    [ObservableProperty]
-    //    private string sampleRate = "Unknown";
-
-    //    [ObservableProperty]
-    //    private string eegChannels = "Unknown";
-    //}
 
     /// <summary>
     /// Model for stored device information

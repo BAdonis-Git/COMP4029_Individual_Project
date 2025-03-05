@@ -3,11 +3,16 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:pageModels="clr-namespace:NeuroSpectator.PageModels"
              xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+             xmlns:utilities="clr-namespace:NeuroSpectator.Utilities"
              x:Class="NeuroSpectator.Pages.YourDevicesPage"
              Title="Your Devices"
              BackgroundColor="#1E1E1E">
 
     <ContentPage.Resources>
+        <ResourceDictionary>
+            <toolkit:SelectedItemEventArgsConverter x:Key="SelectedItemConverter" />
+        </ResourceDictionary>
+        <utilities:ZeroValueConverter x:Key="ZeroConverter" />
         <Style x:Key="HeaderLabelStyle" TargetType="Label">
             <Setter Property="FontSize" Value="20"/>
             <Setter Property="TextColor" Value="#CCCCCC"/>
@@ -46,283 +51,284 @@
             <Setter Property="TextColor" Value="White"/>
             <Setter Property="CornerRadius" Value="5"/>
         </Style>
+
+        <Style x:Key="DeviceCardStyle" TargetType="Frame">
+            <Setter Property="BackgroundColor" Value="#2D2D2D"/>
+            <Setter Property="BorderColor" Value="#444444"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="10"/>
+            <Setter Property="Margin" Value="5"/>
+            <Setter Property="HeightRequest" Value="140"/>
+            <Setter Property="WidthRequest" Value="140"/>
+        </Style>
     </ContentPage.Resources>
 
-    <Grid RowDefinitions="Auto,*" Padding="15">
+    <Grid RowDefinitions="Auto,*" Padding="10">
         <Label 
             Text="Your Devices"
             Grid.Row="0"
             FontSize="24"
             TextColor="#B388FF"
             HorizontalOptions="Center"
-            Margin="0,0,0,15"/>
+            Margin="0,0,0,10"/>
 
         <!-- Main content area -->
-        <Grid Grid.Row="1" ColumnDefinitions="1*,1*" RowDefinitions="*,*">
+        <Grid Grid.Row="1" ColumnDefinitions="0.95*,1.05*" RowDefinitions="Auto,*">
 
-            <!-- Connected Device Panel -->
-            <Frame Grid.Column="0" Grid.Row="0" 
+            <!-- Connected/Available Device Panel -->
+            <Frame Grid.Column="0" Grid.Row="0" Grid.RowSpan="2"
                    Style="{StaticResource CardStyle}">
-                <Grid RowDefinitions="Auto,*">
+                <Grid RowDefinitions="Auto,*,Auto">
                     <Label 
-                        Text="Connected Device"
+                        Text="{Binding DevicePanelTitle}"
                         Style="{StaticResource HeaderLabelStyle}"/>
 
-                    <ScrollView Grid.Row="1">
-                        <Grid>
-                            <!-- Connected Device View -->
-                            <VerticalStackLayout Spacing="15" IsVisible="{Binding IsConnected}">
-                                <!-- Device Name -->
-                                <Label 
-                                    Text="{Binding CurrentDevice.Name}" 
-                                    FontSize="18" 
-                                    TextColor="#B388FF"
-                                    HorizontalOptions="Center"/>
+                    <!-- Connected Device View -->
+                    <VerticalStackLayout Grid.Row="1" Spacing="10" IsVisible="{Binding IsConnected}" VerticalOptions="Center">
+                        <!-- Device Name -->
+                        <Label 
+                            Text="{Binding CurrentDevice.Name}" 
+                            FontSize="18" 
+                            TextColor="#B388FF"
+                            HorizontalOptions="Center"/>
 
-                                <!-- Battery Status Circle -->
-                                <Grid HorizontalOptions="Center" VerticalOptions="Center" 
-                                      WidthRequest="120" HeightRequest="120">
-                                    <Ellipse Stroke="#444444" StrokeThickness="10" 
-                                             WidthRequest="120" HeightRequest="120"/>
+                        <!-- Battery Status Circle -->
+                        <Grid HorizontalOptions="Center" VerticalOptions="Center" 
+                              WidthRequest="100" HeightRequest="100">
+                            <Ellipse Stroke="#444444" StrokeThickness="8" 
+                                     WidthRequest="100" HeightRequest="100"/>
 
-                                    <!-- Battery Progress Circle - We'll replace Arc with a custom approach -->
-                                    <Path Stroke="#92D36E" StrokeThickness="10">
-                                        <Path.Data>
-                                            <PathGeometry>
-                                                <PathFigure IsClosed="False" StartPoint="60,10">
-                                                    <ArcSegment Size="50,50" 
-                                                                 Point="60,110" 
-                                                                 SweepDirection="Clockwise" 
-                                                                 IsLargeArc="{Binding BatteryPercentIsLargeArc}"/>
-                                                </PathFigure>
-                                            </PathGeometry>
-                                        </Path.Data>
-                                    </Path>
+                            <!-- Battery Progress Circle -->
+                            <Path Stroke="#92D36E" StrokeThickness="8">
+                                <Path.Data>
+                                    <PathGeometry>
+                                        <PathFigure IsClosed="False" StartPoint="50,8">
+                                            <ArcSegment Size="42,42" 
+                                                         Point="50,92" 
+                                                         SweepDirection="Clockwise" 
+                                                         IsLargeArc="{Binding BatteryPercentIsLargeArc}"/>
+                                        </PathFigure>
+                                    </PathGeometry>
+                                </Path.Data>
+                            </Path>
 
-                                    <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center">
-                                        <Label Text="{Binding BatteryPercentText}" 
-                                               TextColor="#92D36E" 
-                                               FontSize="16" 
-                                               HorizontalOptions="Center"/>
-                                        <Label Text="Charged" 
-                                               TextColor="#92D36E" 
-                                               FontSize="12" 
-                                               HorizontalOptions="Center"/>
-                                    </VerticalStackLayout>
-                                </Grid>
-
-                                <!-- Connection Status -->
-                                <HorizontalStackLayout HorizontalOptions="Center">
-                                    <Label Text="Connected " 
-                                           TextColor="#92D36E" 
-                                           FontSize="16"/>
-                                    <Label Text="✓" 
-                                           TextColor="#92D36E" 
-                                           FontSize="16"/>
-                                    <Label Text=" (Stable)" 
-                                           TextColor="#CCCCCC" 
-                                           FontSize="16"/>
-                                </HorizontalStackLayout>
-
-                                <!-- Disconnect Button -->
-                                <Button Text="Disconnect" 
-                                        Command="{Binding DisconnectCommand}"
-                                        Style="{StaticResource SecondaryButtonStyle}"/>
-                            </VerticalStackLayout>
-
-                            <!-- No Connected Device View -->
-                            <VerticalStackLayout Spacing="15" IsVisible="{Binding IsNotConnected}">
-                                <Label Text="No Device Connected" 
-                                       TextColor="#AAAAAA" 
+                            <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center">
+                                <Label Text="{Binding BatteryPercentText}" 
+                                       TextColor="#92D36E" 
+                                       FontSize="16" 
                                        HorizontalOptions="Center"/>
-
-                                <!-- Available Devices Section when not connected -->
-                                <Label Text="Available Devices" 
-                                       Style="{StaticResource SubHeaderLabelStyle}" 
-                                       Margin="0,10,0,0"/>
-
-                                <CollectionView 
-                                    ItemsSource="{Binding AvailableDevices}"
-                                    SelectedItem="{Binding SelectedDevice}"
-                                    SelectionMode="Single"
-                                    HeightRequest="150">
-                                    <CollectionView.EmptyView>
-                                        <Label Text="No devices found. Start scanning to discover Muse headbands."
-                                               HorizontalOptions="Center"
-                                               VerticalOptions="Center"
-                                               TextColor="#AAAAAA"/>
-                                    </CollectionView.EmptyView>
-                                    <CollectionView.ItemTemplate>
-                                        <DataTemplate>
-                                            <Frame Style="{StaticResource CardStyle}" Margin="0,2">
-                                                <VerticalStackLayout>
-                                                    <Label Text="{Binding Name}" 
-                                                           TextColor="White" 
-                                                           FontAttributes="Bold"/>
-                                                    <Label Text="{Binding BluetoothMac}" 
-                                                           TextColor="#AAAAAA" 
-                                                           FontSize="12"/>
-                                                    <Label Text="{Binding RSSI, StringFormat='Signal: {0:F1} dBm'}" 
-                                                           TextColor="#AAAAAA" 
-                                                           FontSize="12"/>
-                                                </VerticalStackLayout>
-                                            </Frame>
-                                        </DataTemplate>
-                                    </CollectionView.ItemTemplate>
-                                </CollectionView>
-
-                                <!-- Scan Controls -->
-                                <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-                                    <Button Grid.Column="0" 
-                                            Text="Start Scanning" 
-                                            Command="{Binding StartScanCommand}"
-                                            IsEnabled="{Binding CanScan}"
-                                            Style="{StaticResource SecondaryButtonStyle}"/>
-
-                                    <Button Grid.Column="1" 
-                                            Text="Stop Scanning" 
-                                            Command="{Binding StopScanCommand}"
-                                            IsEnabled="{Binding IsScanning}"
-                                            Style="{StaticResource SecondaryButtonStyle}"/>
-                                </Grid>
-
-                                <!-- Connect Button -->
-                                <Button Text="Connect" 
-                                        Command="{Binding ConnectCommand}"
-                                        IsEnabled="{Binding CanConnect}"
-                                        Style="{StaticResource PrimaryButtonStyle}"/>
-
-                                <!-- Initialize Button (only shown if needed) -->
-                                <Button Text="Initialize Muse Manager" 
-                                        Command="{Binding InitializeCommand}"
-                                        IsEnabled="{Binding CanInitialize}"
-                                        IsVisible="{Binding CanInitialize}"
-                                        Style="{StaticResource SecondaryButtonStyle}"/>
+                                <Label Text="Charged" 
+                                       TextColor="#92D36E" 
+                                       FontSize="12" 
+                                       HorizontalOptions="Center"/>
                             </VerticalStackLayout>
                         </Grid>
-                    </ScrollView>
-                </Grid>
-            </Frame>
 
-            <!-- Active Device Settings Panel -->
-            <Frame Grid.Column="0" Grid.Row="1" 
-                   Style="{StaticResource CardStyle}">
-                <Grid RowDefinitions="Auto,*">
-                    <Label 
-                        Text="Active Device Settings"
-                        Style="{StaticResource HeaderLabelStyle}"/>
+                        <!-- Connection Status -->
+                        <HorizontalStackLayout HorizontalOptions="Center">
+                            <Label Text="Connected " 
+                                   TextColor="#92D36E" 
+                                   FontSize="16"/>
+                            <Label Text="✓" 
+                                   TextColor="#92D36E" 
+                                   FontSize="16"/>
+                            <Label Text=" (Stable)" 
+                                   TextColor="#CCCCCC" 
+                                   FontSize="16"/>
+                        </HorizontalStackLayout>
 
-                    <ScrollView Grid.Row="1">
-                        <Grid>
-                            <VerticalStackLayout Spacing="15" IsVisible="{Binding IsConnected}">
-                                <!-- Settings List -->
-                                <Border BackgroundColor="#383838" StrokeThickness="0" StrokeShape="RoundRectangle 5">
-                                    <VerticalStackLayout Spacing="5" Padding="10">
-                                        <Label Text="{Binding CurrentDeviceSettings.Preset, StringFormat='Preset: {0}'}" 
-                                               Style="{StaticResource NormalLabelStyle}"/>
-                                        <Label Text="{Binding CurrentDeviceSettings.NotchFilter, StringFormat='Notch Filter: {0}'}" 
-                                               Style="{StaticResource NormalLabelStyle}"/>
-                                        <Label Text="{Binding CurrentDeviceSettings.SampleRate, StringFormat='Sample Rate: {0}'}" 
-                                               Style="{StaticResource NormalLabelStyle}"/>
-                                        <Label Text="{Binding CurrentDeviceSettings.EegChannels, StringFormat='EEG Channels: {0}'}" 
-                                               Style="{StaticResource NormalLabelStyle}"/>
-                                    </VerticalStackLayout>
-                                </Border>
-
-                                <!-- Preset Selector -->
-                                <Button Text="Presets" 
-                                        Style="{StaticResource PrimaryButtonStyle}"
-                                        Command="{Binding ShowPresetsCommand}"/>
-
-                                <!-- Save Settings Button -->
-                                <Button Text="Save Settings" 
-                                        Style="{StaticResource SecondaryButtonStyle}"
-                                        Command="{Binding SaveDeviceSettingsCommand}"/>
+                        <!-- Device Settings -->
+                        <Border BackgroundColor="#383838" StrokeThickness="0" StrokeShape="RoundRectangle 5"
+                                Margin="0,10,0,0">
+                            <VerticalStackLayout Spacing="4" Padding="10" HorizontalOptions="Center">
+                                <Label Text="{Binding CurrentDeviceSettings.Preset, StringFormat='Preset: {0}'}" 
+                                       Style="{StaticResource NormalLabelStyle}"/>
+                                <Label Text="{Binding CurrentDeviceSettings.NotchFilter, StringFormat='Notch Filter: {0}'}" 
+                                       Style="{StaticResource NormalLabelStyle}"/>
+                                <Label Text="{Binding CurrentDeviceSettings.SampleRate, StringFormat='Sample Rate: {0}'}" 
+                                       Style="{StaticResource NormalLabelStyle}"/>
+                                <Label Text="{Binding CurrentDeviceSettings.EegChannels, StringFormat='EEG Channels: {0}'}" 
+                                       Style="{StaticResource NormalLabelStyle}"/>
                             </VerticalStackLayout>
+                        </Border>
 
-                            <!-- No Device Connected View -->
-                            <Label IsVisible="{Binding IsNotConnected}" 
-                                   Text="Connect to a device to view and configure settings"
-                                   TextColor="#AAAAAA" 
-                                   HorizontalOptions="Center"
-                                   VerticalOptions="Center"/>
-                        </Grid>
-                    </ScrollView>
-                </Grid>
-            </Frame>
+                        <HorizontalStackLayout HorizontalOptions="Center" Spacing="10" Margin="0,10,0,0">
+                            <!-- Presets Button -->
+                            <Button Text="Presets" 
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    Command="{Binding ShowPresetsCommand}"
+                                    WidthRequest="120"
+                                    HeightRequest="40"/>
 
-            <!-- Your Devices List Panel -->
-            <Frame Grid.Column="1" Grid.Row="0" Grid.RowSpan="2" 
-                   Style="{StaticResource CardStyle}">
-                <Grid RowDefinitions="Auto,*">
-                    <Label 
-                        Text="Your Devices"
-                        Style="{StaticResource HeaderLabelStyle}"/>
+                            <!-- Save Settings Button -->
+                            <Button Text="Save" 
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Command="{Binding SaveDeviceSettingsCommand}"
+                                    WidthRequest="70"
+                                    HeightRequest="40"/>
+                        </HorizontalStackLayout>
 
-                    <VerticalStackLayout Grid.Row="1" Spacing="10">
-                        <!-- Supported Devices Button -->
-                        <Button Text="🔌 Supported Devices" 
-                                Style="{StaticResource PrimaryButtonStyle}"
-                                Command="{Binding ShowSupportedDevicesCommand}"/>
+                        <!-- Disconnect Button -->
+                        <Button Grid.Row="2" Text="Disconnect" 
+                                Command="{Binding DisconnectCommand}"
+                                BackgroundColor="#FF4444"
+                                TextColor="White"
+                                FontAttributes="Bold"
+                                CornerRadius="5"
+                                HorizontalOptions="Center"
+                                Margin="0,10,0,0"
+                                WidthRequest="180"/>
+                    </VerticalStackLayout>
 
-                        <!-- Devices Collection -->
+                    <!-- No Connected Device View -->
+                    <Grid Grid.Row="1" IsVisible="{Binding IsNotConnected}" RowDefinitions="Auto,*,Auto">
+                        <!-- Available Devices List -->
+                        <Label Text="Tap on a device to connect" 
+                               TextColor="#B388FF" 
+                               HorizontalOptions="Center"
+                               Grid.Row="0"
+                               FontAttributes="Bold"
+                               Margin="0,0,0,5"/>
+
                         <CollectionView 
-                            ItemsSource="{Binding StoredDevices}"
-                            SelectedItem="{Binding SelectedStoredDevice}"
-                            SelectionMode="Single"
-                            HeightRequest="500">
+                            Grid.Row="1"
+                            ItemsSource="{Binding AvailableDevices}"
+                            SelectedItem="{Binding SelectedDevice}"
+                            SelectionMode="Single">
                             <CollectionView.EmptyView>
-                                <Label Text="No saved devices found. Connect to a device to save its settings."
+                                <Label Text="No devices found. Start scanning to discover Muse headbands."
                                        HorizontalOptions="Center"
                                        VerticalOptions="Center"
                                        TextColor="#AAAAAA"/>
                             </CollectionView.EmptyView>
                             <CollectionView.ItemTemplate>
                                 <DataTemplate>
-                                    <Frame Style="{StaticResource CardStyle}" Margin="5,5,5,10">
-                                        <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
-                                            <Label Text="{Binding Name}" 
-                                                   Grid.Row="0"
-                                                   TextColor="White" 
-                                                   FontSize="16"
-                                                   FontAttributes="Bold"
-                                                   HorizontalOptions="Center"/>
-
-                                            <Border Grid.Row="1" 
-                                                    BackgroundColor="#444444" 
-                                                    StrokeThickness="0"
-                                                    StrokeShape="RoundRectangle 5"
-                                                    HeightRequest="150" 
-                                                    WidthRequest="150"
-                                                    HorizontalOptions="Center">
-                                                <Label Text="{Binding DeviceType}" 
-                                                       HorizontalOptions="Center" 
-                                                       VerticalOptions="Center"
-                                                       TextColor="#AAAAAA"/>
-                                            </Border>
-
-                                            <Button Grid.Row="2" 
-                                                    Text="Presets" 
-                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type pageModels:YourDevicesPageModel}}, Path=EditDevicePresetsCommand}"
-                                                    CommandParameter="{Binding .}"
-                                                    Style="{StaticResource PrimaryButtonStyle}"/>
-                                        </Grid>
-                                    </Frame>
+                                    <SwipeView>
+                                        <SwipeView.GestureRecognizers>
+                                            <TapGestureRecognizer 
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type pageModels:YourDevicesPageModel}}, Path=ConnectCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        </SwipeView.GestureRecognizers>
+                                        <Frame Style="{StaticResource CardStyle}" Margin="0,2" BackgroundColor="#383838">
+                                            <Grid RowDefinitions="Auto,Auto,Auto">
+                                                <Label Grid.Row="0" 
+                                                       Text="{Binding Name}" 
+                                                       TextColor="White" 
+                                                       FontAttributes="Bold"/>
+                                                <Label Grid.Row="1" 
+                                                       Text="{Binding BluetoothMac}" 
+                                                       TextColor="#AAAAAA" 
+                                                       FontSize="12"/>
+                                                <Label Grid.Row="2" 
+                                                       Text="{Binding RSSI, StringFormat='Signal: {0:F1} dBm'}" 
+                                                       TextColor="#AAAAAA" 
+                                                       FontSize="12"/>
+                                            </Grid>
+                                            <Frame.Triggers>
+                                                <DataTrigger TargetType="Frame" 
+                                                            Binding="{Binding ., Converter={StaticResource SelectedItemConverter}, ConverterParameter={Reference CollectionView}}" 
+                                                            Value="True">
+                                                    <Setter Property="BorderColor" Value="#B388FF" />
+                                                    <Setter Property="BackgroundColor" Value="#404040" />
+                                                </DataTrigger>
+                                            </Frame.Triggers>
+                                        </Frame>
+                                    </SwipeView>
                                 </DataTemplate>
                             </CollectionView.ItemTemplate>
                         </CollectionView>
-                    </VerticalStackLayout>
+
+                        <!-- Scan Button -->
+                        <Button Grid.Row="2"
+                                Text="{Binding ScanButtonText}" 
+                                Command="{Binding ScanCommand}"
+                                IsEnabled="{Binding CanScan}"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                HorizontalOptions="Center"
+                                WidthRequest="200"/>
+                    </Grid>
                 </Grid>
             </Frame>
 
-            <!-- Status Display at Bottom - Optional -->
-            <Label Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="1"
-                   Text="{Binding StatusText}"
-                   TextColor="#AAAAAA"
-                   FontSize="12"
-                   VerticalOptions="End"
-                   HorizontalOptions="Center"
-                   Margin="0,0,0,5"/>
+            <!-- Your Devices List Panel -->
+            <Frame Grid.Column="1" Grid.Row="0" Grid.RowSpan="2" 
+       Style="{StaticResource CardStyle}">
+                <Grid RowDefinitions="Auto,Auto,*">
+                    <Label 
+            Text="Your Devices"
+            Style="{StaticResource HeaderLabelStyle}"/>
+
+                    <!-- Supported Devices Button -->
+                    <Button Grid.Row="1" 
+                Text="🔌 Supported Devices" 
+                Style="{StaticResource PrimaryButtonStyle}"
+                Command="{Binding ShowSupportedDevicesCommand}"
+                HorizontalOptions="Fill"
+                Margin="0,0,0,8"/>
+
+                    <!-- Devices Collection - Grid Layout -->
+                    <CollectionView Grid.Row="2" ItemsSource="{Binding StoredDevices}">
+                        <CollectionView.ItemsLayout>
+                            <GridItemsLayout Orientation="Vertical" Span="2" HorizontalItemSpacing="8" VerticalItemSpacing="8"/>
+                        </CollectionView.ItemsLayout>
+
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Frame Style="{StaticResource CardStyle}" 
+                           Padding="8" 
+                           BackgroundColor="#383838"
+                           BorderColor="#666666">
+                                    <Grid RowDefinitions="Auto,*,Auto" RowSpacing="4">
+                                        <Label Text="{Binding Name}" 
+                                   Grid.Row="0"
+                                   TextColor="White" 
+                                   FontSize="14"
+                                   FontAttributes="Bold"
+                                   HorizontalOptions="Center"/>
+
+                                        <Frame Grid.Row="1" 
+                                   BackgroundColor="#444444" 
+                                   BorderColor="Transparent"
+                                   CornerRadius="5"
+                                   Padding="5"
+                                   HeightRequest="60" 
+                                   Margin="8">
+                                            <Label Text="{Binding DeviceType}" 
+                                       HorizontalOptions="Center" 
+                                       VerticalOptions="Center"
+                                       FontSize="12"
+                                       TextColor="#AAAAAA"/>
+                                        </Frame>
+
+                                        <Button Grid.Row="2" 
+                                    Text="Presets" 
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type pageModels:YourDevicesPageModel}}, Path=EditDevicePresetsCommand}"
+                                    CommandParameter="{Binding .}"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    FontSize="12"
+                                    Margin="0,4,0,0"
+                                    HeightRequest="30"/>
+                                    </Grid>
+                                    <Frame.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type pageModels:YourDevicesPageModel}}, Path=EditDevicePresetsCommand}"
+                                                   CommandParameter="{Binding .}" />
+                                    </Frame.GestureRecognizers>
+                                </Frame>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </Grid>
+            </Frame>
+
+            <!-- Status Display at Bottom -->
+            <Label Grid.Column="0" Grid.Row="1"
+       Text="{Binding StatusText}"
+       TextColor="#AAAAAA"
+       FontSize="12"
+       VerticalOptions="End"
+       HorizontalOptions="Center"
+       IsVisible="{Binding IsNotConnected}"
+       Margin="0,0,0,5"/>
         </Grid>
     </Grid>
 </ContentPage>
