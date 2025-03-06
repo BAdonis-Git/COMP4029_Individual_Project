@@ -5,12 +5,48 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:local="clr-namespace:NeuroSpectator.Pages"
     xmlns:pages="clr-namespace:NeuroSpectator.Pages"
-    Shell.FlyoutBehavior="Disabled"
-    Title="NeuroSpectator">
+    Shell.FlyoutBehavior="Flyout"
+    Title="NeuroSpectator"
+    FlyoutBackgroundColor="#1E1E1E">
 
-    <ShellContent
-        Title="Home"
-        ContentTemplate="{DataTemplate local:YourDevicesPage}"
-        Route="MainPage" />
+    <Shell.FlyoutHeader>
+        <Grid HeightRequest="120" BackgroundColor="#2D2D2D">
+            <Label Text="NeuroSpectator" 
+                   TextColor="#B388FF" 
+                   FontSize="24" 
+                   FontAttributes="Bold" 
+                   HorizontalOptions="Center" 
+                   VerticalOptions="Center"/>
+        </Grid>
+    </Shell.FlyoutHeader>
 
+    <FlyoutItem Title="Your Dashboard" Icon="dashboard.png">
+        <ShellContent ContentTemplate="{DataTemplate pages:YourDashboardPage}" Route="YourDashboardPage" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Your Nexus" Icon="nexus.png">
+        <ShellContent ContentTemplate="{DataTemplate pages:YourNexusPage}" Route="YourNexusPage" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Your Devices" Icon="devices.png">
+        <ShellContent ContentTemplate="{DataTemplate pages:YourDevicesPage}" Route="YourDevicesPage" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Browse" Icon="browse.png">
+        <ShellContent ContentTemplate="{DataTemplate pages:BrowsePage}" Route="BrowsePage" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Mod Page" Icon="mods.png">
+        <ShellContent ContentTemplate="{DataTemplate pages:ModPage}" Route="ModPage" />
+    </FlyoutItem>
+
+    <Shell.FlyoutFooter>
+        <Grid HeightRequest="50" BackgroundColor="#2D2D2D">
+            <Label Text="NeuroSpectator v1.0" 
+                   TextColor="#AAAAAA" 
+                   FontSize="12" 
+                   HorizontalOptions="Center" 
+                   VerticalOptions="Center"/>
+        </Grid>
+    </Shell.FlyoutFooter>
 </Shell>

@@ -4,7 +4,9 @@
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap rescap">
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:uap6="http://schemas.microsoft.com/appx/manifest/uap/windows10/6"
+  IgnorableNamespaces="uap rescap uap3 uap6">
 
   <Identity Name="maui-package-name-placeholder" Publisher="CN=User Name" Version="0.0.0.0" />
 
@@ -43,7 +45,10 @@
     <rescap:Capability Name="runFullTrust" />
     <Capability Name="internetClientServer"/>
     <Capability Name="internetClient"/>
+    <uap3:Capability Name="backgroundMediaPlayback"/>
+    <uap6:Capability Name="graphicsCapture"/>
     <DeviceCapability Name="bluetooth"/>
+    <DeviceCapability Name="microphone"/>
   </Capabilities>
 
 </Package>

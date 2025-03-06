@@ -104,7 +104,6 @@
 	<!-- Folder structure placeholders -->
 	<ItemGroup>
 		<Folder Include="Data\" />
-		<Folder Include="Models\" />
 		<Folder Include="Models\BCI\" />
 		<Folder Include="Models\BCI\Common\" />
 		<Folder Include="Models\BCI\Muse\" />
@@ -116,11 +115,29 @@
 		<Folder Include="Resources\Raw\Release_x64\" />
 	</ItemGroup>
 	<ItemGroup>
+		<MauiXaml Update="Pages\BrowsePage.xaml">
+		  <Generator>MSBuild:Compile</Generator>
+		</MauiXaml>
 		<MauiXaml Update="Pages\DevicePresetsPage.xaml">
+		  <Generator>MSBuild:Compile</Generator>
+		</MauiXaml>
+		<MauiXaml Update="Pages\ModPage.xaml">
+		  <Generator>MSBuild:Compile</Generator>
+		</MauiXaml>
+		<MauiXaml Update="Pages\StreamSpectatorPage.xaml">
+		  <Generator>MSBuild:Compile</Generator>
+		</MauiXaml>
+		<MauiXaml Update="Pages\StreamStreamerPage.xaml">
+		  <Generator>MSBuild:Compile</Generator>
+		</MauiXaml>
+		<MauiXaml Update="Pages\YourDashboardPage.xaml">
 		  <Generator>MSBuild:Compile</Generator>
 		</MauiXaml>
 		<MauiXaml Update="Pages\YourDevicesPage.xaml">
 			<Generator>MSBuild:Compile</Generator>
+		</MauiXaml>
+		<MauiXaml Update="Pages\YourNexusPage.xaml">
+		  <Generator>MSBuild:Compile</Generator>
 		</MauiXaml>
 	</ItemGroup>
 

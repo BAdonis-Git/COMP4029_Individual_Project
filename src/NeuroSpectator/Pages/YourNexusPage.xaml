@@ -1,0 +1,321 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:pageModels="clr-namespace:NeuroSpectator.PageModels"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+             xmlns:utilities="clr-namespace:NeuroSpectator.Utilities"
+             x:Class="NeuroSpectator.Pages.YourNexusPage"
+             Title="Your Nexus"
+             BackgroundColor="#1E1E1E">
+
+    <ContentPage.Resources>
+        <utilities:ZeroValueConverter x:Key="ZeroConverter" />
+        <Style x:Key="HeaderLabelStyle" TargetType="Label">
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="TextColor" Value="#CCCCCC"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+
+        <Style x:Key="SubHeaderLabelStyle" TargetType="Label">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="TextColor" Value="#AAAAAA"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+        </Style>
+
+        <Style x:Key="NormalLabelStyle" TargetType="Label">
+            <Setter Property="TextColor" Value="#CCCCCC"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+
+        <Style x:Key="CardStyle" TargetType="Frame">
+            <Setter Property="BackgroundColor" Value="#2D2D2D"/>
+            <Setter Property="BorderColor" Value="#444444"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="15"/>
+            <Setter Property="Margin" Value="5"/>
+        </Style>
+
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="#B388FF"/>
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="CornerRadius" Value="5"/>
+        </Style>
+
+        <Style x:Key="StatCardStyle" TargetType="Frame">
+            <Setter Property="BackgroundColor" Value="#383838"/>
+            <Setter Property="BorderColor" Value="#444444"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="15"/>
+            <Setter Property="Margin" Value="5"/>
+        </Style>
+
+        <Style x:Key="StatLabelStyle" TargetType="Label">
+            <Setter Property="TextColor" Value="#B388FF"/>
+            <Setter Property="FontSize" Value="24"/>
+            <Setter Property="HorizontalOptions" Value="Center"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+        </Style>
+
+        <Style x:Key="StatDescriptionStyle" TargetType="Label">
+            <Setter Property="TextColor" Value="#AAAAAA"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="HorizontalOptions" Value="Center"/>
+        </Style>
+    </ContentPage.Resources>
+
+    <Grid Padding="10" RowDefinitions="Auto,Auto,Auto,*">
+        <!-- Header section with profile info and start streaming button -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="5">
+            <VerticalStackLayout>
+                <Label Text="Your Nexus" FontSize="24" TextColor="#B388FF" FontAttributes="Bold"/>
+                <Label Text="Manage your streams and metrics" TextColor="#AAAAAA" FontSize="14"/>
+            </VerticalStackLayout>
+
+            <Button Grid.Column="1" 
+                    Text="Start Stream" 
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    Command="{Binding StartStreamCommand}"
+                    VerticalOptions="Center"
+                    Padding="15,10"/>
+        </Grid>
+
+        <!-- Your Stats section -->
+        <Frame Grid.Row="1" Style="{StaticResource CardStyle}">
+            <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
+                <Label Text="Your Stats" Style="{StaticResource HeaderLabelStyle}"/>
+
+                <Grid Grid.Row="1" ColumnDefinitions="*,*,*,*" ColumnSpacing="10">
+                    <!-- Total Stream Time -->
+                    <Frame Style="{StaticResource StatCardStyle}" Grid.Column="0">
+                        <VerticalStackLayout>
+                            <Label Text="28h" Style="{StaticResource StatLabelStyle}"/>
+                            <Label Text="Stream Time" Style="{StaticResource StatDescriptionStyle}"/>
+                        </VerticalStackLayout>
+                    </Frame>
+
+                    <!-- Viewers -->
+                    <Frame Style="{StaticResource StatCardStyle}" Grid.Column="1">
+                        <VerticalStackLayout>
+                            <Label Text="1.2k" Style="{StaticResource StatLabelStyle}"/>
+                            <Label Text="Total Viewers" Style="{StaticResource StatDescriptionStyle}"/>
+                        </VerticalStackLayout>
+                    </Frame>
+
+                    <!-- Subscribers -->
+                    <Frame Style="{StaticResource StatCardStyle}" Grid.Column="2">
+                        <VerticalStackLayout>
+                            <Label Text="85" Style="{StaticResource StatLabelStyle}"/>
+                            <Label Text="Subscribers" Style="{StaticResource StatDescriptionStyle}"/>
+                        </VerticalStackLayout>
+                    </Frame>
+
+                    <!-- Avg. Focus Score -->
+                    <Frame Style="{StaticResource StatCardStyle}" Grid.Column="3">
+                        <VerticalStackLayout>
+                            <Label Text="82%" Style="{StaticResource StatLabelStyle}"/>
+                            <Label Text="Avg. Focus" Style="{StaticResource StatDescriptionStyle}"/>
+                        </VerticalStackLayout>
+                    </Frame>
+                </Grid>
+            </Grid>
+        </Frame>
+
+        <!-- Your Streams -->
+        <Frame Grid.Row="2" Style="{StaticResource CardStyle}">
+            <Grid RowDefinitions="Auto,*">
+                <Label Text="Your Streams" Style="{StaticResource HeaderLabelStyle}"/>
+
+                <ScrollView Grid.Row="1">
+                    <VerticalStackLayout Spacing="10">
+                        <!-- Stream 1 -->
+                        <Frame Style="{StaticResource CardStyle}" BackgroundColor="#383838">
+                            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto">
+                                <!-- Preview Image -->
+                                <Frame Grid.Column="0" Grid.RowSpan="3" 
+                                       BackgroundColor="#444444"
+                                       Padding="0" 
+                                       WidthRequest="100" 
+                                       HeightRequest="70" 
+                                       CornerRadius="5"
+                                       Margin="0,0,10,0">
+                                    <Label Text="Preview"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"
+                                           TextColor="#AAAAAA"/>
+                                </Frame>
+
+                                <!-- Title and date -->
+                                <Label Grid.Column="1" Grid.Row="0"
+                                       Text="CS:GO Tournament Finals" 
+                                       TextColor="White" 
+                                       FontAttributes="Bold"/>
+
+                                <Label Grid.Column="1" Grid.Row="1"
+                                       Text="Streamed on Mar 2, 2025" 
+                                       TextColor="#AAAAAA" 
+                                       FontSize="12"/>
+
+                                <!-- Stats -->
+                                <HorizontalStackLayout Grid.Column="1" Grid.Row="2" Spacing="10">
+                                    <Label Text="Views: 1,245" 
+                                           TextColor="#AAAAAA" 
+                                           FontSize="12"/>
+
+                                    <Label Text="Peak Focus: 92%" 
+                                           TextColor="#AAAAAA" 
+                                           FontSize="12"/>
+                                </HorizontalStackLayout>
+
+                                <!-- Action Buttons -->
+                                <Button Grid.Column="2" Grid.Row="0"
+                                        Text="View" 
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        HeightRequest="30"
+                                        FontSize="12"
+                                        Padding="10,0"
+                                        Margin="0,0,0,5"
+                                        Command="{Binding ViewStreamCommand}"/>
+
+                                <Button Grid.Column="2" Grid.Row="1"
+                                        Text="Analytics" 
+                                        BackgroundColor="#444444"
+                                        TextColor="White"
+                                        HeightRequest="30"
+                                        FontSize="12"
+                                        Padding="10,0"
+                                        Margin="0"
+                                        CornerRadius="5"
+                                        Command="{Binding ViewAnalyticsCommand}"/>
+                            </Grid>
+                        </Frame>
+
+                        <!-- Stream 2 -->
+                        <Frame Style="{StaticResource CardStyle}" BackgroundColor="#383838">
+                            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto">
+                                <!-- Preview Image -->
+                                <Frame Grid.Column="0" Grid.RowSpan="3" 
+                                       BackgroundColor="#444444"
+                                       Padding="0" 
+                                       WidthRequest="100" 
+                                       HeightRequest="70" 
+                                       CornerRadius="5"
+                                       Margin="0,0,10,0">
+                                    <Label Text="Preview"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"
+                                           TextColor="#AAAAAA"/>
+                                </Frame>
+
+                                <!-- Title and date -->
+                                <Label Grid.Column="1" Grid.Row="0"
+                                       Text="Elden Ring Playthrough - Part A" 
+                                       TextColor="White" 
+                                       FontAttributes="Bold"/>
+
+                                <Label Grid.Column="1" Grid.Row="1"
+                                       Text="Streamed on Feb 28, 2025" 
+                                       TextColor="#AAAAAA" 
+                                       FontSize="12"/>
+
+                                <!-- Stats -->
+                                <HorizontalStackLayout Grid.Column="1" Grid.Row="2" Spacing="10">
+                                    <Label Text="Views: 876" 
+                                           TextColor="#AAAAAA" 
+                                           FontSize="12"/>
+
+                                    <Label Text="Peak Focus: 88%" 
+                                           TextColor="#AAAAAA" 
+                                           FontSize="12"/>
+                                </HorizontalStackLayout>
+
+                                <!-- Action Buttons -->
+                                <Button Grid.Column="2" Grid.Row="0"
+                                        Text="View" 
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        HeightRequest="30"
+                                        FontSize="12"
+                                        Padding="10,0"
+                                        Margin="0,0,0,5"
+                                        Command="{Binding ViewStreamCommand}"/>
+
+                                <Button Grid.Column="2" Grid.Row="1"
+                                        Text="Analytics" 
+                                        BackgroundColor="#444444"
+                                        TextColor="White"
+                                        HeightRequest="30"
+                                        FontSize="12"
+                                        Padding="10,0"
+                                        Margin="0"
+                                        CornerRadius="5"
+                                        Command="{Binding ViewAnalyticsCommand}"/>
+                            </Grid>
+                        </Frame>
+                    </VerticalStackLayout>
+                </ScrollView>
+            </Grid>
+        </Frame>
+
+        <!-- Brain Metrics History -->
+        <Frame Grid.Row="3" Style="{StaticResource CardStyle}">
+            <Grid RowDefinitions="Auto,*">
+                <Label Text="Brain Metrics History" Style="{StaticResource HeaderLabelStyle}"/>
+
+                <Grid Grid.Row="1" RowDefinitions="Auto,*">
+                    <!-- Time range selector -->
+                    <HorizontalStackLayout Spacing="10" HorizontalOptions="Center" Margin="0,0,0,10">
+                        <Button Text="Today" 
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                HeightRequest="30"
+                                FontSize="12"
+                                Padding="15,0"/>
+
+                        <Button Text="Week" 
+                                BackgroundColor="#444444"
+                                TextColor="White"
+                                HeightRequest="30"
+                                FontSize="12"
+                                Padding="15,0"
+                                CornerRadius="5"/>
+
+                        <Button Text="Month" 
+                                BackgroundColor="#444444"
+                                TextColor="White"
+                                HeightRequest="30"
+                                FontSize="12"
+                                Padding="15,0"
+                                CornerRadius="5"/>
+
+                        <Button Text="All Time" 
+                                BackgroundColor="#444444"
+                                TextColor="White"
+                                HeightRequest="30"
+                                FontSize="12"
+                                Padding="15,0"
+                                CornerRadius="5"/>
+                    </HorizontalStackLayout>
+
+                    <!-- Metrics Chart Placeholder -->
+                    <Frame Grid.Row="1" 
+                           BackgroundColor="#383838"
+                           Padding="10"
+                           CornerRadius="5">
+                        <Grid RowDefinitions="Auto,*">
+                            <Label Text="Brain Wave Activity Over Time" 
+                                   HorizontalOptions="Center"
+                                   TextColor="White"
+                                   FontAttributes="Bold"/>
+
+                            <Label Grid.Row="1"
+                                   Text="Chart Placeholder - Will show line chart of brain wave activity"
+                                   HorizontalOptions="Center"
+                                   VerticalOptions="Center"
+                                   TextColor="#AAAAAA"/>
+                        </Grid>
+                    </Frame>
+                </Grid>
+            </Grid>
+        </Frame>
+    </Grid>
+</ContentPage>
