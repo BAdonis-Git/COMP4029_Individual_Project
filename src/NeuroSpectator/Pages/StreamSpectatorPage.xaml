@@ -1,0 +1,384 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:pageModels="clr-namespace:NeuroSpectator.PageModels"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+             xmlns:utilities="clr-namespace:NeuroSpectator.Utilities"
+             x:Class="NeuroSpectator.Pages.StreamSpectatorPage"
+             Title="Stream Viewer"
+             BackgroundColor="#1E1E1E">
+
+    <ContentPage.Resources>
+        <utilities:ZeroValueConverter x:Key="ZeroConverter" />
+        <Style x:Key="HeaderLabelStyle" TargetType="Label">
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="TextColor" Value="#CCCCCC"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+
+        <Style x:Key="SubHeaderLabelStyle" TargetType="Label">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="TextColor" Value="#AAAAAA"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+        </Style>
+
+        <Style x:Key="NormalLabelStyle" TargetType="Label">
+            <Setter Property="TextColor" Value="#CCCCCC"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+
+        <Style x:Key="CardStyle" TargetType="Frame">
+            <Setter Property="BackgroundColor" Value="#2D2D2D"/>
+            <Setter Property="BorderColor" Value="#444444"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="15"/>
+            <Setter Property="Margin" Value="5"/>
+        </Style>
+
+        <Style x:Key="LiveTagStyle" TargetType="Label">
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="BackgroundColor" Value="#E91E63"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="HorizontalOptions" Value="Start"/>
+        </Style>
+
+        <Style x:Key="ControlButtonStyle" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="#444444"/>
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Margin" Value="5"/>
+        </Style>
+
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="#B388FF"/>
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Margin" Value="5"/>
+        </Style>
+
+        <Style x:Key="ChatMessageStyle" TargetType="Label">
+            <Setter Property="TextColor" Value="#CCCCCC"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Margin" Value="0,2"/>
+        </Style>
+
+        <Style x:Key="MetricCardStyle" TargetType="Frame">
+            <Setter Property="BackgroundColor" Value="#383838"/>
+            <Setter Property="BorderColor" Value="#444444"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Padding" Value="10"/>
+            <Setter Property="Margin" Value="0,5"/>
+        </Style>
+
+        <Style x:Key="MetricValueStyle" TargetType="Label">
+            <Setter Property="TextColor" Value="#B388FF"/>
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="HorizontalOptions" Value="Start"/>
+        </Style>
+
+        <Style x:Key="EventLogStyle" TargetType="Label">
+            <Setter Property="TextColor" Value="#CCCCCC"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="0,2"/>
+        </Style>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,*,Auto" ColumnDefinitions="3*,*">
+        <!-- Top Information Bar -->
+        <Grid Grid.Row="0" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*,Auto" BackgroundColor="#222222" Padding="10,5">
+            <HorizontalStackLayout Grid.Column="0" Spacing="10">
+                <Label Text="LIVE" 
+                       Style="{StaticResource LiveTagStyle}" 
+                       VerticalOptions="Center"/>
+
+                <Label Text="{Binding StreamerName}" 
+                       TextColor="White" 
+                       FontSize="16" 
+                       FontAttributes="Bold"
+                       VerticalOptions="Center"/>
+            </HorizontalStackLayout>
+
+            <Label Grid.Column="1" 
+                   Text="{Binding StreamTitle}" 
+                   TextColor="#CCCCCC" 
+                   HorizontalOptions="Center"
+                   VerticalOptions="Center"/>
+
+            <HorizontalStackLayout Grid.Column="2" Spacing="10">
+                <Label Text="{Binding ViewerCount, StringFormat='{0} viewers'}" 
+                       TextColor="#AAAAAA" 
+                       VerticalOptions="Center"/>
+
+                <Button Text="Subscribe" 
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        HeightRequest="30"
+                        Command="{Binding SubscribeCommand}"/>
+
+                <Button Text="Close" 
+                        BackgroundColor="#FF5252"
+                        TextColor="White"
+                        CornerRadius="5"
+                        HeightRequest="30"
+                        Padding="10,0"
+                        Command="{Binding CloseStreamCommand}"/>
+            </HorizontalStackLayout>
+        </Grid>
+
+        <!-- Main Stream Area -->
+        <Grid Grid.Row="1" Grid.Column="0">
+            <!-- Stream Display -->
+            <Frame BackgroundColor="#121212" 
+                   BorderColor="#444444" 
+                   Padding="0" 
+                   CornerRadius="0" 
+                   Margin="0">
+                <Grid>
+                    <Label Text="Stream Display with Brain Data Overlays" 
+                           HorizontalOptions="Center" 
+                           VerticalOptions="Center" 
+                           TextColor="#AAAAAA"/>
+                </Grid>
+            </Frame>
+
+            <!-- Brain Data Controls Overlay (bottom) -->
+            <Frame VerticalOptions="End" 
+                   BackgroundColor="#222222" 
+                   BorderColor="Transparent" 
+                   Margin="0" 
+                   Padding="10,5" 
+                   CornerRadius="0">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Label Grid.Column="0" 
+                           Text="Brain Data:" 
+                           TextColor="#AAAAAA" 
+                           VerticalOptions="Center"/>
+
+                    <HorizontalStackLayout Grid.Column="1" Spacing="10" HorizontalOptions="Center">
+                        <Button Text="Focus" 
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                HeightRequest="30"
+                                FontSize="12"
+                                Command="{Binding ToggleBrainMetricCommand}"
+                                CommandParameter="Focus"/>
+
+                        <Button Text="Alpha" 
+                                Style="{StaticResource ControlButtonStyle}"
+                                HeightRequest="30"
+                                FontSize="12"
+                                Command="{Binding ToggleBrainMetricCommand}"
+                                CommandParameter="Alpha"/>
+
+                        <Button Text="Beta" 
+                                Style="{StaticResource ControlButtonStyle}"
+                                HeightRequest="30"
+                                FontSize="12"
+                                Command="{Binding ToggleBrainMetricCommand}"
+                                CommandParameter="Beta"/>
+
+                        <Button Text="Full Overlay" 
+                                Style="{StaticResource ControlButtonStyle}"
+                                HeightRequest="30"
+                                FontSize="12"
+                                Command="{Binding ToggleBrainMetricCommand}"
+                                CommandParameter="Full"/>
+                    </HorizontalStackLayout>
+
+                    <HorizontalStackLayout Grid.Column="2" Spacing="10">
+                        <Button Text="Screenshot" 
+                                Style="{StaticResource ControlButtonStyle}"
+                                HeightRequest="30"
+                                FontSize="12"
+                                Command="{Binding TakeScreenshotCommand}"/>
+
+                        <Button Text="PiP Mode" 
+                                Style="{StaticResource ControlButtonStyle}"
+                                HeightRequest="30"
+                                FontSize="12"
+                                Command="{Binding TogglePiPModeCommand}"/>
+                    </HorizontalStackLayout>
+                </Grid>
+            </Frame>
+        </Grid>
+
+        <!-- Right Side Panel -->
+        <Grid Grid.Row="1" Grid.Column="1" RowDefinitions="*,Auto,*">
+            <!-- Chat Panel -->
+            <Frame Grid.Row="0" Style="{StaticResource CardStyle}">
+                <Grid RowDefinitions="Auto,*">
+                    <Label Text="Live Chat" Style="{StaticResource SubHeaderLabelStyle}"/>
+
+                    <ScrollView Grid.Row="1">
+                        <StackLayout>
+                            <Label Text="User1: Hello everyone!" Style="{StaticResource ChatMessageStyle}"/>
+                            <Label Text="User2: Great stream today!" Style="{StaticResource ChatMessageStyle}"/>
+                            <Label Text="User3: How's your focus level now?" Style="{StaticResource ChatMessageStyle}"/>
+                            <Label Text="User4: Brain data looks interesting!" Style="{StaticResource ChatMessageStyle}"/>
+                            <Label Text="User5: What sensitivity settings are you using?" Style="{StaticResource ChatMessageStyle}"/>
+                            <Label Text="Streamer: Thanks for watching everyone!" Style="{StaticResource ChatMessageStyle}" TextColor="#B388FF"/>
+                        </StackLayout>
+                    </ScrollView>
+                </Grid>
+            </Frame>
+
+            <!-- Chat Input -->
+            <Grid Grid.Row="1" ColumnDefinitions="*,Auto">
+                <Entry Grid.Column="0" 
+                       Placeholder="Chat message..." 
+                       PlaceholderColor="#777777"
+                       TextColor="White"
+                       BackgroundColor="#383838"
+                       Margin="5,0"
+                       Text="{Binding MessageText}"/>
+
+                <Button Grid.Column="1" 
+                        Text="Send" 
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Command="{Binding SendChatMessageCommand}"/>
+            </Grid>
+
+            <!-- Brain Data Metrics Panel -->
+            <Frame Grid.Row="2" Style="{StaticResource CardStyle}">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <Label Text="Brain Data Metrics" Style="{StaticResource SubHeaderLabelStyle}"/>
+
+                    <ScrollView Grid.Row="1">
+                        <VerticalStackLayout Spacing="5">
+                            <!-- Focus Metric -->
+                            <Frame Style="{StaticResource MetricCardStyle}">
+                                <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto">
+                                    <Label Text="Focus Level" 
+                                           TextColor="#AAAAAA" 
+                                           FontSize="14"/>
+
+                                    <Label Grid.Row="1" 
+                                           Text="87%" 
+                                           Style="{StaticResource MetricValueStyle}"/>
+
+                                    <Label Grid.Column="1" Grid.RowSpan="2" 
+                                           Text="High" 
+                                           TextColor="#92D36E" 
+                                           FontSize="16" 
+                                           VerticalOptions="Center"/>
+                                </Grid>
+                            </Frame>
+
+                            <!-- Alpha Wave Metric -->
+                            <Frame Style="{StaticResource MetricCardStyle}">
+                                <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto">
+                                    <Label Text="Alpha Wave" 
+                                           TextColor="#AAAAAA" 
+                                           FontSize="14"/>
+
+                                    <Label Grid.Row="1" 
+                                           Text="64μV" 
+                                           Style="{StaticResource MetricValueStyle}"/>
+
+                                    <Label Grid.Column="1" Grid.RowSpan="2" 
+                                           Text="Medium" 
+                                           TextColor="#FFD740" 
+                                           FontSize="16" 
+                                           VerticalOptions="Center"/>
+                                </Grid>
+                            </Frame>
+
+                            <!-- Beta Wave Metric -->
+                            <Frame Style="{StaticResource MetricCardStyle}">
+                                <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto">
+                                    <Label Text="Beta Wave" 
+                                           TextColor="#AAAAAA" 
+                                           FontSize="14"/>
+
+                                    <Label Grid.Row="1" 
+                                           Text="32μV" 
+                                           Style="{StaticResource MetricValueStyle}"/>
+
+                                    <Label Grid.Column="1" Grid.RowSpan="2" 
+                                           Text="Medium" 
+                                           TextColor="#FFD740" 
+                                           FontSize="16" 
+                                           VerticalOptions="Center"/>
+                                </Grid>
+                            </Frame>
+
+                            <!-- Theta Wave Metric -->
+                            <Frame Style="{StaticResource MetricCardStyle}">
+                                <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto">
+                                    <Label Text="Theta Wave" 
+                                           TextColor="#AAAAAA" 
+                                           FontSize="14"/>
+
+                                    <Label Grid.Row="1" 
+                                           Text="28μV" 
+                                           Style="{StaticResource MetricValueStyle}"/>
+
+                                    <Label Grid.Column="1" Grid.RowSpan="2" 
+                                           Text="Low" 
+                                           TextColor="#AAAAAA" 
+                                           FontSize="16" 
+                                           VerticalOptions="Center"/>
+                                </Grid>
+                            </Frame>
+                        </VerticalStackLayout>
+                    </ScrollView>
+
+                    <!-- Brain Data Event Log -->
+                    <Frame Grid.Row="2" Style="{StaticResource MetricCardStyle}" Margin="0,10,0,0">
+                        <VerticalStackLayout>
+                            <Label Text="Recent Brain Events" 
+                                   TextColor="White" 
+                                   FontAttributes="Bold"/>
+
+                            <Label Text="14:32:21 - Focus spike detected (92%)" 
+                                   Style="{StaticResource EventLogStyle}"/>
+
+                            <Label Text="14:30:05 - Alpha wave peak" 
+                                   Style="{StaticResource EventLogStyle}"/>
+
+                            <Label Text="14:28:47 - Beta/Alpha ratio shift" 
+                                   Style="{StaticResource EventLogStyle}"/>
+                        </VerticalStackLayout>
+                    </Frame>
+                </Grid>
+            </Frame>
+        </Grid>
+
+        <!-- Bottom Information Bar -->
+        <Grid Grid.Row="2" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*,Auto" BackgroundColor="#222222" Padding="10,5">
+            <Label Grid.Column="0" 
+                   Text="{Binding StreamInfo}" 
+                   TextColor="#AAAAAA" 
+                   VerticalOptions="Center"/>
+
+            <Label Grid.Column="1" 
+                   Text="{Binding StatusMessage}" 
+                   TextColor="#AAAAAA" 
+                   HorizontalOptions="Center"
+                   VerticalOptions="Center"/>
+
+            <HorizontalStackLayout Grid.Column="2" Spacing="5">
+                <Picker Title="Quality" 
+                        BackgroundColor="#383838"
+                        TextColor="White"
+                        TitleColor="#AAAAAA"
+                        WidthRequest="100"
+                        SelectedItem="{Binding SelectedQuality}"
+                        ItemsSource="{Binding QualityOptions}"/>
+
+                <Button Text="Settings" 
+                        Style="{StaticResource ControlButtonStyle}"
+                        HeightRequest="30"
+                        FontSize="12"
+                        Padding="10,0"
+                        Command="{Binding ShowSettingsCommand}"/>
+            </HorizontalStackLayout>
+        </Grid>
+    </Grid>
+</ContentPage>

@@ -1,0 +1,293 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:pageModels="clr-namespace:NeuroSpectator.PageModels"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+             xmlns:utilities="clr-namespace:NeuroSpectator.Utilities"
+             x:Class="NeuroSpectator.Pages.StreamStreamerPage"
+             Title="Stream Control"
+             BackgroundColor="#1E1E1E"
+             Shell.NavBarIsVisible="False">
+
+    <ContentPage.Resources>
+        <utilities:ZeroValueConverter x:Key="ZeroConverter" />
+        <Style x:Key="HeaderLabelStyle" TargetType="Label">
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="TextColor" Value="#CCCCCC"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+
+        <Style x:Key="SubHeaderLabelStyle" TargetType="Label">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="TextColor" Value="#AAAAAA"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+        </Style>
+
+        <Style x:Key="NormalLabelStyle" TargetType="Label">
+            <Setter Property="TextColor" Value="#CCCCCC"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+
+        <Style x:Key="CardStyle" TargetType="Frame">
+            <Setter Property="BackgroundColor" Value="#2D2D2D"/>
+            <Setter Property="BorderColor" Value="#444444"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="15"/>
+            <Setter Property="Margin" Value="5"/>
+        </Style>
+
+        <Style x:Key="LiveTagStyle" TargetType="Label">
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="BackgroundColor" Value="#E91E63"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="HorizontalOptions" Value="Center"/>
+        </Style>
+
+        <Style x:Key="ControlButtonStyle" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="#444444"/>
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Margin" Value="5"/>
+        </Style>
+
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="#B388FF"/>
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Margin" Value="5"/>
+        </Style>
+
+        <Style x:Key="DangerButtonStyle" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="#FF5252"/>
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Margin" Value="5"/>
+        </Style>
+
+        <Style x:Key="ChatMessageStyle" TargetType="Label">
+            <Setter Property="TextColor" Value="#CCCCCC"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Margin" Value="0,2"/>
+        </Style>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,*,Auto" ColumnDefinitions="2*,*">
+        <!-- Top Controls -->
+        <Grid Grid.Row="0" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*,Auto">
+            <!-- Stream Status -->
+            <Label Grid.Column="0" 
+                   Text="Stream Status:" 
+                   VerticalOptions="Center"
+                   TextColor="#AAAAAA" 
+                   FontSize="16"
+                   Margin="15,10"/>
+
+            <Label Grid.Column="0" 
+                   Text="LIVE" 
+                   Style="{StaticResource LiveTagStyle}"
+                   VerticalOptions="Center"
+                   Margin="130,0,0,0"/>
+
+            <!-- Stream Title -->
+            <Label Grid.Column="1" 
+                   Text="{Binding StreamTitle}" 
+                   VerticalOptions="Center"
+                   HorizontalOptions="Center"
+                   TextColor="White" 
+                   FontSize="18" 
+                   FontAttributes="Bold"/>
+
+            <!-- Close Button -->
+            <Button Grid.Column="2" 
+                    Text="End Stream" 
+                    Style="{StaticResource DangerButtonStyle}"
+                    Command="{Binding EndStreamCommand}"
+                    VerticalOptions="Center"
+                    Margin="10"/>
+        </Grid>
+
+        <!-- Main Content Area -->
+        <Grid Grid.Row="1" Grid.Column="0" RowDefinitions="*,Auto">
+            <!-- Stream Preview Area -->
+            <Frame Grid.Row="0" 
+                   BackgroundColor="#121212" 
+                   BorderColor="#444444" 
+                   Padding="0" 
+                   CornerRadius="5" 
+                   Margin="10">
+                <Grid>
+                    <Label Text="Stream Preview Display" 
+                           HorizontalOptions="Center" 
+                           VerticalOptions="Center" 
+                           TextColor="#AAAAAA"/>
+
+                    <!-- Placeholder for gameplay preview -->
+                </Grid>
+            </Frame>
+
+            <!-- Stream Controls -->
+            <Frame Grid.Row="1" Style="{StaticResource CardStyle}">
+                <Grid ColumnDefinitions="*,*,*,*,*" RowDefinitions="Auto,Auto">
+                    <Label Text="Stream Controls" 
+                           Grid.ColumnSpan="5"
+                           Style="{StaticResource SubHeaderLabelStyle}"
+                           HorizontalOptions="Center"
+                           Margin="0,0,0,10"/>
+
+                    <!-- First Row Controls -->
+                    <Button Grid.Row="1" Grid.Column="0"
+                            Text="Toggle Camera" 
+                            Style="{StaticResource ControlButtonStyle}"
+                            Command="{Binding ToggleCameraCommand}"/>
+
+                    <Button Grid.Row="1" Grid.Column="1"
+                            Text="Toggle Mic" 
+                            Style="{StaticResource ControlButtonStyle}"
+                            Command="{Binding ToggleMicCommand}"/>
+
+                    <Button Grid.Row="1" Grid.Column="2"
+                            Text="Toggle Brain Data" 
+                            Style="{StaticResource ControlButtonStyle}"
+                            Command="{Binding ToggleBrainDataCommand}"/>
+
+                    <Button Grid.Row="1" Grid.Column="3"
+                            Text="Stream Quality" 
+                            Style="{StaticResource ControlButtonStyle}"
+                            Command="{Binding StreamQualityCommand}"/>
+
+                    <Button Grid.Row="1" Grid.Column="4"
+                            Text="More Options" 
+                            Style="{StaticResource ControlButtonStyle}"
+                            Command="{Binding MoreOptionsCommand}"/>
+                </Grid>
+            </Frame>
+        </Grid>
+
+        <!-- Right Side Panel -->
+        <Grid Grid.Row="1" Grid.Column="1" RowDefinitions="Auto,*,Auto,*,Auto">
+            <!-- Brain Data Panel -->
+            <Frame Grid.Row="0" Style="{StaticResource CardStyle}">
+                <VerticalStackLayout>
+                    <Label Text="Brain Data" Style="{StaticResource SubHeaderLabelStyle}"/>
+
+                    <!-- Placeholder for brain data display -->
+                    <Label Text="Status: Connected" TextColor="#92D36E" Margin="0,5,0,0"/>
+
+                    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" Margin="0,10,0,0">
+                        <Label Grid.Row="0" Grid.Column="0" Text="Focus:" TextColor="#AAAAAA"/>
+                        <Label Grid.Row="0" Grid.Column="1" Text="87%" TextColor="#CCCCCC"/>
+
+                        <Label Grid.Row="1" Grid.Column="0" Text="Alpha Wave:" TextColor="#AAAAAA"/>
+                        <Label Grid.Row="1" Grid.Column="1" Text="High" TextColor="#CCCCCC"/>
+                    </Grid>
+
+                    <Button Text="Configure Brain Data Display" 
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Command="{Binding ConfigureBrainDataCommand}"
+                            Margin="0,10,0,0"/>
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- Chat Panel -->
+            <Frame Grid.Row="1" Style="{StaticResource CardStyle}">
+                <Grid RowDefinitions="Auto,*">
+                    <Label Text="Stream Chat" Style="{StaticResource SubHeaderLabelStyle}"/>
+
+                    <ScrollView Grid.Row="1">
+                        <StackLayout>
+                            <Label Text="User1: Hello everyone!" Style="{StaticResource ChatMessageStyle}"/>
+                            <Label Text="User2: Great stream today!" Style="{StaticResource ChatMessageStyle}"/>
+                            <Label Text="User3: How's your focus level now?" Style="{StaticResource ChatMessageStyle}"/>
+                            <Label Text="User4: Brain data looks interesting!" Style="{StaticResource ChatMessageStyle}"/>
+                            <Label Text="User5: What sensitivity settings are you using?" Style="{StaticResource ChatMessageStyle}"/>
+                        </StackLayout>
+                    </ScrollView>
+                </Grid>
+            </Frame>
+
+            <!-- Message Input -->
+            <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
+                <Entry Grid.Column="0" 
+                       Placeholder="Type a message..." 
+                       PlaceholderColor="#777777"
+                       TextColor="White"
+                       BackgroundColor="#383838"
+                       Margin="5,0"/>
+
+                <Button Grid.Column="1" 
+                        Text="Send" 
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Command="{Binding SendChatMessageCommand}"/>
+            </Grid>
+
+            <!-- Stream Stats Panel -->
+            <Frame Grid.Row="3" Style="{StaticResource CardStyle}">
+                <Grid RowDefinitions="Auto,*">
+                    <Label Text="Stream Statistics" Style="{StaticResource SubHeaderLabelStyle}"/>
+
+                    <Grid Grid.Row="1" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,10,0,0">
+                        <Label Grid.Row="0" Grid.Column="0" Text="Viewers:" TextColor="#AAAAAA"/>
+                        <Label Grid.Row="0" Grid.Column="1" Text="128" TextColor="#CCCCCC"/>
+
+                        <Label Grid.Row="1" Grid.Column="0" Text="Stream Time:" TextColor="#AAAAAA"/>
+                        <Label Grid.Row="1" Grid.Column="1" Text="01:45:32" TextColor="#CCCCCC"/>
+
+                        <Label Grid.Row="2" Grid.Column="0" Text="Brain Events:" TextColor="#AAAAAA"/>
+                        <Label Grid.Row="2" Grid.Column="1" Text="47" TextColor="#CCCCCC"/>
+
+                        <Label Grid.Row="3" Grid.Column="0" Text="Stream Health:" TextColor="#AAAAAA"/>
+                        <Label Grid.Row="3" Grid.Column="1" Text="Excellent" TextColor="#92D36E"/>
+                    </Grid>
+                </Grid>
+            </Frame>
+
+            <!-- Quick Commands Panel -->
+            <Frame Grid.Row="4" Style="{StaticResource CardStyle}">
+                <VerticalStackLayout>
+                    <Label Text="Quick Commands" Style="{StaticResource SubHeaderLabelStyle}"/>
+
+                    <Button Text="Take Screenshot" 
+                            Style="{StaticResource ControlButtonStyle}"
+                            Command="{Binding TakeScreenshotCommand}"
+                            Margin="0,10,0,0"/>
+
+                    <Button Text="Mark Highlight" 
+                            Style="{StaticResource ControlButtonStyle}"
+                            Command="{Binding MarkHighlightCommand}"/>
+
+                    <Button Text="Share Brain Event" 
+                            Style="{StaticResource ControlButtonStyle}"
+                            Command="{Binding ShareBrainEventCommand}"/>
+                </VerticalStackLayout>
+            </Frame>
+        </Grid>
+
+        <!-- Bottom Status Bar -->
+        <Grid Grid.Row="2" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*,Auto" BackgroundColor="#222222" Padding="10,5">
+            <Label Grid.Column="0" 
+                   Text="Connected to: MK.IO Streaming" 
+                   TextColor="#AAAAAA" 
+                   VerticalOptions="Center"/>
+
+            <Label Grid.Column="1" 
+                   Text="{Binding StatusMessage}" 
+                   TextColor="#AAAAAA" 
+                   HorizontalOptions="Center"
+                   VerticalOptions="Center"/>
+
+            <Label Grid.Column="2" 
+                   Text="Stream Key: ****-****-****" 
+                   TextColor="#AAAAAA" 
+                   VerticalOptions="Center"/>
+        </Grid>
+    </Grid>
+</ContentPage>

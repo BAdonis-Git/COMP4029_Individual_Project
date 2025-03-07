@@ -1,0 +1,506 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:pageModels="clr-namespace:NeuroSpectator.PageModels"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+             xmlns:utilities="clr-namespace:NeuroSpectator.Utilities"
+             x:Class="NeuroSpectator.Pages.ModPage"
+             Title="Mod Page"
+             BackgroundColor="#1E1E1E">
+
+    <ContentPage.Resources>
+        <utilities:ZeroValueConverter x:Key="ZeroConverter" />
+        <Style x:Key="HeaderLabelStyle" TargetType="Label">
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="TextColor" Value="#CCCCCC"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+
+        <Style x:Key="SubHeaderLabelStyle" TargetType="Label">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="TextColor" Value="#AAAAAA"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+        </Style>
+
+        <Style x:Key="NormalLabelStyle" TargetType="Label">
+            <Setter Property="TextColor" Value="#CCCCCC"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+
+        <Style x:Key="CardStyle" TargetType="Frame">
+            <Setter Property="BackgroundColor" Value="#2D2D2D"/>
+            <Setter Property="BorderColor" Value="#444444"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="15"/>
+            <Setter Property="Margin" Value="5"/>
+        </Style>
+
+        <Style x:Key="ModCardStyle" TargetType="Frame">
+            <Setter Property="BackgroundColor" Value="#383838"/>
+            <Setter Property="BorderColor" Value="#444444"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="15"/>
+            <Setter Property="Margin" Value="5"/>
+        </Style>
+
+        <Style x:Key="CategoryStyle" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="#444444"/>
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+
+        <Style x:Key="SelectedCategoryStyle" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="#B388FF"/>
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+
+        <Style x:Key="DownloadButtonStyle" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="#B388FF"/>
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Padding" Value="15,5"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+        </Style>
+    </ContentPage.Resources>
+
+    <Grid Padding="10" RowDefinitions="Auto,Auto,*">
+        <!-- Header with Search and Filter -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="5">
+            <VerticalStackLayout>
+                <Label Text="Mod Packages" FontSize="24" TextColor="#B388FF" FontAttributes="Bold"/>
+                <Label Text="Download game mods for brain data integration" TextColor="#AAAAAA" FontSize="14"/>
+            </VerticalStackLayout>
+
+            <SearchBar Grid.Column="1" 
+                       Placeholder="Search mods..."
+                       BackgroundColor="#383838"
+                       TextColor="White"
+                       PlaceholderColor="#AAAAAA"
+                       WidthRequest="200"
+                       VerticalOptions="Center"
+                       Text="{Binding SearchQuery}"
+                       SearchCommand="{Binding SearchCommand}"/>
+
+            <Picker Grid.Column="2"
+                    Title="Filter by device"
+                    BackgroundColor="#383838"
+                    TextColor="White"
+                    TitleColor="#AAAAAA"
+                    WidthRequest="150"
+                    VerticalOptions="Center"
+                    Margin="5,0,0,0"
+                    SelectedItem="{Binding SelectedDeviceFilter}"
+                    ItemsSource="{Binding DeviceFilters}"/>
+        </Grid>
+
+        <!-- Popular Mods Carousel -->
+        <Frame Grid.Row="1" Style="{StaticResource CardStyle}" Padding="10">
+            <VerticalStackLayout Spacing="10">
+                <Label Text="Popular Mods" Style="{StaticResource HeaderLabelStyle}"/>
+
+                <ScrollView Orientation="Horizontal">
+                    <HorizontalStackLayout Spacing="10">
+                        <!-- Popular Mod 1 -->
+                        <Frame Style="{StaticResource ModCardStyle}" WidthRequest="200" HeightRequest="180">
+                            <Grid RowDefinitions="Auto,*,Auto">
+                                <Label Text="CS:GO Brain Integration" 
+                                       TextColor="White" 
+                                       FontAttributes="Bold"/>
+
+                                <Frame Grid.Row="1" 
+                                       BackgroundColor="#444444"
+                                       Padding="0" 
+                                       CornerRadius="5"
+                                       Margin="0,5">
+                                    <Label Text="CS:GO"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"
+                                           TextColor="#AAAAAA"/>
+                                </Frame>
+
+                                <Button Grid.Row="2"
+                                        Text="Download" 
+                                        Style="{StaticResource DownloadButtonStyle}"
+                                        Command="{Binding DownloadModCommand}"
+                                        CommandParameter="CSGO-Mod"/>
+                            </Grid>
+                        </Frame>
+
+                        <!-- Popular Mod 2 -->
+                        <Frame Style="{StaticResource ModCardStyle}" WidthRequest="200" HeightRequest="180">
+                            <Grid RowDefinitions="Auto,*,Auto">
+                                <Label Text="Valorant Brain Metrics" 
+                                       TextColor="White" 
+                                       FontAttributes="Bold"/>
+
+                                <Frame Grid.Row="1" 
+                                       BackgroundColor="#444444"
+                                       Padding="0" 
+                                       CornerRadius="5"
+                                       Margin="0,5">
+                                    <Label Text="Valorant"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"
+                                           TextColor="#AAAAAA"/>
+                                </Frame>
+
+                                <Button Grid.Row="2"
+                                        Text="Download" 
+                                        Style="{StaticResource DownloadButtonStyle}"
+                                        Command="{Binding DownloadModCommand}"
+                                        CommandParameter="Valorant-Mod"/>
+                            </Grid>
+                        </Frame>
+
+                        <!-- Popular Mod 3 -->
+                        <Frame Style="{StaticResource ModCardStyle}" WidthRequest="200" HeightRequest="180">
+                            <Grid RowDefinitions="Auto,*,Auto">
+                                <Label Text="LOL Brain Stats Overlay" 
+                                       TextColor="White" 
+                                       FontAttributes="Bold"/>
+
+                                <Frame Grid.Row="1" 
+                                       BackgroundColor="#444444"
+                                       Padding="0" 
+                                       CornerRadius="5"
+                                       Margin="0,5">
+                                    <Label Text="League of Legends"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"
+                                           TextColor="#AAAAAA"/>
+                                </Frame>
+
+                                <Button Grid.Row="2"
+                                        Text="Download" 
+                                        Style="{StaticResource DownloadButtonStyle}"
+                                        Command="{Binding DownloadModCommand}"
+                                        CommandParameter="LOL-Mod"/>
+                            </Grid>
+                        </Frame>
+
+                        <!-- Popular Mod 4 -->
+                        <Frame Style="{StaticResource ModCardStyle}" WidthRequest="200" HeightRequest="180">
+                            <Grid RowDefinitions="Auto,*,Auto">
+                                <Label Text="Minecraft Focus Tracker" 
+                                       TextColor="White" 
+                                       FontAttributes="Bold"/>
+
+                                <Frame Grid.Row="1" 
+                                       BackgroundColor="#444444"
+                                       Padding="0" 
+                                       CornerRadius="5"
+                                       Margin="0,5">
+                                    <Label Text="Minecraft"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"
+                                           TextColor="#AAAAAA"/>
+                                </Frame>
+
+                                <Button Grid.Row="2"
+                                        Text="Download" 
+                                        Style="{StaticResource DownloadButtonStyle}"
+                                        Command="{Binding DownloadModCommand}"
+                                        CommandParameter="Minecraft-Mod"/>
+                            </Grid>
+                        </Frame>
+                    </HorizontalStackLayout>
+                </ScrollView>
+            </VerticalStackLayout>
+        </Frame>
+
+        <!-- All Mods Grid -->
+        <ScrollView Grid.Row="2">
+            <Grid Padding="5" ColumnDefinitions="*,*,*,*" RowDefinitions="Auto,Auto,Auto">
+                <!-- Row 1 -->
+                <Frame Grid.Row="0" Grid.Column="0" Style="{StaticResource ModCardStyle}">
+                    <Grid RowDefinitions="Auto,Auto,*,Auto">
+                        <Label Text="CS:GO Brain Integration" 
+                               TextColor="White" 
+                               FontAttributes="Bold"/>
+
+                        <Label Grid.Row="1"
+                               Text="Version: 1.2.3" 
+                               TextColor="#AAAAAA" 
+                               FontSize="12"/>
+
+                        <Frame Grid.Row="2" 
+                               BackgroundColor="#444444"
+                               Padding="5" 
+                               CornerRadius="5"
+                               Margin="0,5">
+                            <VerticalStackLayout>
+                                <Label Text="Compatible with:"
+                                       TextColor="#AAAAAA"
+                                       FontSize="12"/>
+                                <Label Text="• Muse Headband"
+                                       TextColor="#CCCCCC"
+                                       FontSize="12"/>
+                                <Label Text="• Mendi Headband"
+                                       TextColor="#CCCCCC"
+                                       FontSize="12"/>
+                            </VerticalStackLayout>
+                        </Frame>
+
+                        <Button Grid.Row="3"
+                                Text="Download" 
+                                Style="{StaticResource DownloadButtonStyle}"
+                                Command="{Binding DownloadModCommand}"
+                                CommandParameter="CSGO-Mod"/>
+                    </Grid>
+                </Frame>
+
+                <Frame Grid.Row="0" Grid.Column="1" Style="{StaticResource ModCardStyle}">
+                    <Grid RowDefinitions="Auto,Auto,*,Auto">
+                        <Label Text="Valorant Brain Metrics" 
+                               TextColor="White" 
+                               FontAttributes="Bold"/>
+
+                        <Label Grid.Row="1"
+                               Text="Version: 2.0.1" 
+                               TextColor="#AAAAAA" 
+                               FontSize="12"/>
+
+                        <Frame Grid.Row="2" 
+                               BackgroundColor="#444444"
+                               Padding="5" 
+                               CornerRadius="5"
+                               Margin="0,5">
+                            <VerticalStackLayout>
+                                <Label Text="Compatible with:"
+                                       TextColor="#AAAAAA"
+                                       FontSize="12"/>
+                                <Label Text="• Muse Headband"
+                                       TextColor="#CCCCCC"
+                                       FontSize="12"/>
+                            </VerticalStackLayout>
+                        </Frame>
+
+                        <Button Grid.Row="3"
+                                Text="Download" 
+                                Style="{StaticResource DownloadButtonStyle}"
+                                Command="{Binding DownloadModCommand}"
+                                CommandParameter="Valorant-Mod"/>
+                    </Grid>
+                </Frame>
+
+                <Frame Grid.Row="0" Grid.Column="2" Style="{StaticResource ModCardStyle}">
+                    <Grid RowDefinitions="Auto,Auto,*,Auto">
+                        <Label Text="LOL Brain Stats Overlay" 
+                               TextColor="White" 
+                               FontAttributes="Bold"/>
+
+                        <Label Grid.Row="1"
+                               Text="Version: 1.5.0" 
+                               TextColor="#AAAAAA" 
+                               FontSize="12"/>
+
+                        <Frame Grid.Row="2" 
+                               BackgroundColor="#444444"
+                               Padding="5" 
+                               CornerRadius="5"
+                               Margin="0,5">
+                            <VerticalStackLayout>
+                                <Label Text="Compatible with:"
+                                       TextColor="#AAAAAA"
+                                       FontSize="12"/>
+                                <Label Text="• Muse Headband"
+                                       TextColor="#CCCCCC"
+                                       FontSize="12"/>
+                                <Label Text="• Mendi Headband"
+                                       TextColor="#CCCCCC"
+                                       FontSize="12"/>
+                            </VerticalStackLayout>
+                        </Frame>
+
+                        <Button Grid.Row="3"
+                                Text="Download" 
+                                Style="{StaticResource DownloadButtonStyle}"
+                                Command="{Binding DownloadModCommand}"
+                                CommandParameter="LOL-Mod"/>
+                    </Grid>
+                </Frame>
+
+                <Frame Grid.Row="0" Grid.Column="3" Style="{StaticResource ModCardStyle}">
+                    <Grid RowDefinitions="Auto,Auto,*,Auto">
+                        <Label Text="Minecraft Focus Tracker" 
+                               TextColor="White" 
+                               FontAttributes="Bold"/>
+
+                        <Label Grid.Row="1"
+                               Text="Version: 1.0.2" 
+                               TextColor="#AAAAAA" 
+                               FontSize="12"/>
+
+                        <Frame Grid.Row="2" 
+                               BackgroundColor="#444444"
+                               Padding="5" 
+                               CornerRadius="5"
+                               Margin="0,5">
+                            <VerticalStackLayout>
+                                <Label Text="Compatible with:"
+                                       TextColor="#AAAAAA"
+                                       FontSize="12"/>
+                                <Label Text="• Muse Headband"
+                                       TextColor="#CCCCCC"
+                                       FontSize="12"/>
+                            </VerticalStackLayout>
+                        </Frame>
+
+                        <Button Grid.Row="3"
+                                Text="Download" 
+                                Style="{StaticResource DownloadButtonStyle}"
+                                Command="{Binding DownloadModCommand}"
+                                CommandParameter="Minecraft-Mod"/>
+                    </Grid>
+                </Frame>
+
+                <!-- Row 2 -->
+                <Frame Grid.Row="1" Grid.Column="0" Style="{StaticResource ModCardStyle}">
+                    <Grid RowDefinitions="Auto,Auto,*,Auto">
+                        <Label Text="Apex Legends Brain Stats" 
+                               TextColor="White" 
+                               FontAttributes="Bold"/>
+
+                        <Label Grid.Row="1"
+                               Text="Version: 0.9.5 (Beta)" 
+                               TextColor="#AAAAAA" 
+                               FontSize="12"/>
+
+                        <Frame Grid.Row="2" 
+                               BackgroundColor="#444444"
+                               Padding="5" 
+                               CornerRadius="5"
+                               Margin="0,5">
+                            <VerticalStackLayout>
+                                <Label Text="Compatible with:"
+                                       TextColor="#AAAAAA"
+                                       FontSize="12"/>
+                                <Label Text="• Muse Headband"
+                                       TextColor="#CCCCCC"
+                                       FontSize="12"/>
+                            </VerticalStackLayout>
+                        </Frame>
+
+                        <Button Grid.Row="3"
+                                Text="Download Beta" 
+                                Style="{StaticResource DownloadButtonStyle}"
+                                Command="{Binding DownloadModCommand}"
+                                CommandParameter="Apex-Mod"/>
+                    </Grid>
+                </Frame>
+
+                <Frame Grid.Row="1" Grid.Column="1" Style="{StaticResource ModCardStyle}">
+                    <Grid RowDefinitions="Auto,Auto,*,Auto">
+                        <Label Text="Fortnite Brain Monitor" 
+                               TextColor="White" 
+                               FontAttributes="Bold"/>
+
+                        <Label Grid.Row="1"
+                               Text="Version: 1.1.0" 
+                               TextColor="#AAAAAA" 
+                               FontSize="12"/>
+
+                        <Frame Grid.Row="2" 
+                               BackgroundColor="#444444"
+                               Padding="5" 
+                               CornerRadius="5"
+                               Margin="0,5">
+                            <VerticalStackLayout>
+                                <Label Text="Compatible with:"
+                                       TextColor="#AAAAAA"
+                                       FontSize="12"/>
+                                <Label Text="• Muse Headband"
+                                       TextColor="#CCCCCC"
+                                       FontSize="12"/>
+                                <Label Text="• Mendi Headband"
+                                       TextColor="#CCCCCC"
+                                       FontSize="12"/>
+                            </VerticalStackLayout>
+                        </Frame>
+
+                        <Button Grid.Row="3"
+                                Text="Download" 
+                                Style="{StaticResource DownloadButtonStyle}"
+                                Command="{Binding DownloadModCommand}"
+                                CommandParameter="Fortnite-Mod"/>
+                    </Grid>
+                </Frame>
+
+                <Frame Grid.Row="1" Grid.Column="2" Style="{StaticResource ModCardStyle}">
+                    <Grid RowDefinitions="Auto,Auto,*,Auto">
+                        <Label Text="Rocket League Stats" 
+                               TextColor="White" 
+                               FontAttributes="Bold"/>
+
+                        <Label Grid.Row="1"
+                               Text="Version: 1.3.2" 
+                               TextColor="#AAAAAA" 
+                               FontSize="12"/>
+
+                        <Frame Grid.Row="2" 
+                               BackgroundColor="#444444"
+                               Padding="5" 
+                               CornerRadius="5"
+                               Margin="0,5">
+                            <VerticalStackLayout>
+                                <Label Text="Compatible with:"
+                                       TextColor="#AAAAAA"
+                                       FontSize="12"/>
+                                <Label Text="• Muse Headband"
+                                       TextColor="#CCCCCC"
+                                       FontSize="12"/>
+                            </VerticalStackLayout>
+                        </Frame>
+
+                        <Button Grid.Row="3"
+                                Text="Download" 
+                                Style="{StaticResource DownloadButtonStyle}"
+                                Command="{Binding DownloadModCommand}"
+                                CommandParameter="RocketLeague-Mod"/>
+                    </Grid>
+                </Frame>
+
+                <Frame Grid.Row="1" Grid.Column="3" Style="{StaticResource ModCardStyle}">
+                    <Grid RowDefinitions="Auto,Auto,*,Auto">
+                        <Label Text="Dota 2 Brain Interface" 
+                               TextColor="White" 
+                               FontAttributes="Bold"/>
+
+                        <Label Grid.Row="1"
+                               Text="Version: 2.1.1" 
+                               TextColor="#AAAAAA" 
+                               FontSize="12"/>
+
+                        <Frame Grid.Row="2" 
+                               BackgroundColor="#444444"
+                               Padding="5" 
+                               CornerRadius="5"
+                               Margin="0,5">
+                            <VerticalStackLayout>
+                                <Label Text="Compatible with:"
+                                       TextColor="#AAAAAA"
+                                       FontSize="12"/>
+                                <Label Text="• Muse Headband"
+                                       TextColor="#CCCCCC"
+                                       FontSize="12"/>
+                            </VerticalStackLayout>
+                        </Frame>
+
+                        <Button Grid.Row="3"
+                                Text="Download" 
+                                Style="{StaticResource DownloadButtonStyle}"
+                                Command="{Binding DownloadModCommand}"
+                                CommandParameter="Dota2-Mod"/>
+                    </Grid>
+                </Frame>
+            </Grid>
+        </ScrollView>
+    </Grid>
+</ContentPage>
