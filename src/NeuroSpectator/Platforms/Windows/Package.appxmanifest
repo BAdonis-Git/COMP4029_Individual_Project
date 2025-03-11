@@ -9,24 +9,18 @@
   IgnorableNamespaces="uap rescap uap3 uap6">
 
   <Identity Name="maui-package-name-placeholder" Publisher="CN=User Name" Version="0.0.0.0" />
-
-  <mp:PhoneIdentity PhoneProductId="A0C853C4-D37A-41A0-821A-81FFB8FE4BCF" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
-
   <Properties>
     <DisplayName>$placeholder$</DisplayName>
     <PublisherDisplayName>User Name</PublisherDisplayName>
     <Logo>$placeholder$.png</Logo>
   </Properties>
-
   <Dependencies>
     <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19041.0" />
     <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19041.0" />
   </Dependencies>
-
   <Resources>
-    <Resource Language="x-generate" />
+    <Resource Language="en-gb" />
   </Resources>
-
   <Applications>
     <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="$targetentrypoint$">
       <uap:VisualElements
@@ -40,7 +34,6 @@
       </uap:VisualElements>
     </Application>
   </Applications>
-
   <Capabilities>
     <rescap:Capability Name="runFullTrust" />
     <Capability Name="internetClientServer"/>
@@ -49,6 +42,7 @@
     <uap6:Capability Name="graphicsCapture"/>
     <DeviceCapability Name="bluetooth"/>
     <DeviceCapability Name="microphone"/>
-  </Capabilities>
+    <DeviceCapability Name="webcam"/>
 
+  </Capabilities>
 </Package>
