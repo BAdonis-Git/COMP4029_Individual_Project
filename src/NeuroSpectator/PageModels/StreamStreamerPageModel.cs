@@ -1,38 +1,46 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
+using System.Windows.Input;
 using Microsoft.Maui.Controls;
 using NeuroSpectator.Models.BCI.Common;
-using NeuroSpectator.Services;
 using NeuroSpectator.Services.BCI.Interfaces;
-using System.Windows.Input;
-using NeuroSpectator.Models.Stream;
+using NeuroSpectator.Services.Integration;
+using NeuroSpectator.Services.Streaming;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace NeuroSpectator.PageModels
 {
-    /// <summary>
-    /// View model for the StreamStreamerPage
-    /// </summary>
-    public partial class StreamStreamerPageModel : ObservableObject, IDisposable
+    public partial class StreamStreamerPageModel : ObservableObject
     {
         private readonly IBCIDeviceManager deviceManager;
-        private IDispatcherTimer streamTimer;
-        private IDispatcherTimer brainDataTimer;
-        private DateTime streamStartTime;
-        private bool _disposed = false;
+        private readonly OBSIntegrationService obsService;
+        private readonly BrainDataOBSHelper brainDataObsHelper;
+        private readonly IMKIOStreamingService streamingService;
+
+        #region Properties
 
         [ObservableProperty]
-        private bool isInitialized;
+        private string streamTitle = "NeuroSpectator Stream";
 
         [ObservableProperty]
-        private string streamTitle = "CS:GO Tournament Finals";
+        private string gameCategory = "Gaming";
 
         [ObservableProperty]
-        private bool isLive = true;
+        private string streamTimeDisplay = "00:00:00";
+
+        [ObservableProperty]
+        private int viewerCount = 0;
+
+        [ObservableProperty]
+        private string statusMessage = "Ready";
+
+        [ObservableProperty]
+        private bool isConnectedToObs = false;
+
+        [ObservableProperty]
+        private bool isLive = false;
 
         [ObservableProperty]
         private bool cameraEnabled = true;
@@ -41,427 +49,613 @@ namespace NeuroSpectator.PageModels
         private bool micEnabled = true;
 
         [ObservableProperty]
-        private bool brainDataEnabled = true;
+        private bool isBrainDataVisible = true;
 
         [ObservableProperty]
-        private string streamQuality = "1080p60fps";
+        private string obsScene = "Main";
 
         [ObservableProperty]
-        private string streamTimeDisplay = "00:00:00";
-
-        [ObservableProperty]
-        private int viewerCount = 128;
-
-        [ObservableProperty]
-        private int brainEventCount = 47;
-
-        [ObservableProperty]
-        private string streamHealth = "Excellent";
-
-        [ObservableProperty]
-        private ObservableCollection<ChatMessage> chatMessages = new ObservableCollection<ChatMessage>();
+        private List<string> availableScenes = new List<string>();
 
         [ObservableProperty]
         private string chatMessageInput = "";
 
         [ObservableProperty]
-        private string statusMessage = "Streaming successfully - All systems nominal";
+        private string streamHealth = "Good";
+
+        [ObservableProperty]
+        private int brainEventCount = 0;
 
         [ObservableProperty]
         private Dictionary<string, string> brainMetrics = new Dictionary<string, string>();
 
-        // Commands
+        // Timer for updating the stream time
+        private System.Timers.Timer streamTimer;
+        private DateTime streamStartTime;
+
+        #endregion
+
+        #region Commands
+
+        public ICommand ConnectToObsCommand { get; }
+        public ICommand RefreshObsInfoCommand { get; }
+        public ICommand StartStreamCommand { get; }
+        public ICommand EndStreamCommand { get; }
         public ICommand ToggleCameraCommand { get; }
         public ICommand ToggleMicCommand { get; }
         public ICommand ToggleBrainDataCommand { get; }
-        public ICommand StreamQualityCommand { get; }
-        public ICommand MoreOptionsCommand { get; }
         public ICommand ConfigureBrainDataCommand { get; }
-        public ICommand SendChatMessageCommand { get; }
-        public ICommand TakeScreenshotCommand { get; }
         public ICommand MarkHighlightCommand { get; }
+        public ICommand TakeScreenshotCommand { get; }
+        public ICommand SendChatMessageCommand { get; }
         public ICommand ShareBrainEventCommand { get; }
-        public ICommand EndStreamCommand { get; }
+        public ICommand ConfirmExitAsync { get; }
 
-        /// <summary>
-        /// Creates a new instance of the StreamStreamerPageModel class
-        /// </summary>
-        public StreamStreamerPageModel(IBCIDeviceManager deviceManager)
+        #endregion
+
+        public StreamStreamerPageModel(
+            IBCIDeviceManager deviceManager,
+            OBSIntegrationService obsService,
+            BrainDataOBSHelper brainDataObsHelper,
+            IMKIOStreamingService streamingService)
         {
-            this.deviceManager = deviceManager ?? throw new ArgumentNullException(nameof(deviceManager));
+            this.deviceManager = deviceManager;
+            this.obsService = obsService;
+            this.brainDataObsHelper = brainDataObsHelper;
+            this.streamingService = streamingService;
 
             // Initialize commands
-            ToggleCameraCommand = new RelayCommand(ToggleCamera);
-            ToggleMicCommand = new RelayCommand(ToggleMic);
-            ToggleBrainDataCommand = new RelayCommand(ToggleBrainData);
-            StreamQualityCommand = new AsyncRelayCommand(ShowStreamQualityOptionsAsync);
-            MoreOptionsCommand = new AsyncRelayCommand(ShowMoreOptionsAsync);
-            ConfigureBrainDataCommand = new AsyncRelayCommand(ConfigureBrainDataAsync);
-            SendChatMessageCommand = new RelayCommand(SendChatMessage);
-            TakeScreenshotCommand = new RelayCommand(TakeScreenshot);
-            MarkHighlightCommand = new RelayCommand(MarkHighlight);
-            ShareBrainEventCommand = new RelayCommand(ShareBrainEvent);
+            ConnectToObsCommand = new AsyncRelayCommand(ConnectToObsAsync);
+            RefreshObsInfoCommand = new AsyncRelayCommand(RefreshObsInfoAsync);
+            StartStreamCommand = new AsyncRelayCommand(StartStreamAsync);
             EndStreamCommand = new AsyncRelayCommand(EndStreamAsync);
+            ToggleCameraCommand = new AsyncRelayCommand(ToggleCameraAsync);
+            ToggleMicCommand = new AsyncRelayCommand(ToggleMicAsync);
+            ToggleBrainDataCommand = new AsyncRelayCommand(ToggleBrainDataAsync);
+            ConfigureBrainDataCommand = new AsyncRelayCommand(ConfigureBrainDataAsync);
+            MarkHighlightCommand = new AsyncRelayCommand(MarkHighlightAsync);
+            TakeScreenshotCommand = new AsyncRelayCommand(TakeScreenshotAsync);
+            SendChatMessageCommand = new AsyncRelayCommand(SendChatMessageAsync);
+            ShareBrainEventCommand = new AsyncRelayCommand(ShareBrainEventAsync);
+            ConfirmExitAsync = new AsyncRelayCommand(ShowExitConfirmationAsync);
+
+            // Subscribe to events
+            obsService.ConnectionStatusChanged += OnObsConnectionStatusChanged;
+            obsService.StreamingStatusChanged += OnObsStreamingStatusChanged;
+            obsService.SceneChanged += OnObsSceneChanged;
+
+            brainDataObsHelper.BrainMetricsUpdated += OnBrainMetricsUpdated;
+            brainDataObsHelper.SignificantBrainEventDetected += OnSignificantBrainEventDetected;
+            brainDataObsHelper.ErrorOccurred += OnBrainDataError;
+
+            streamingService.StatusChanged += OnStreamingStatusChanged;
+            streamingService.StatisticsUpdated += OnStreamingStatsUpdated;
 
             // Initialize brain metrics
-            BrainMetrics["Focus"] = "87%";
-            BrainMetrics["Alpha Wave"] = "High";
-            BrainMetrics["Beta Wave"] = "Medium";
-            BrainMetrics["Theta Wave"] = "Low";
-            BrainMetrics["Delta Wave"] = "Low";
-            BrainMetrics["Gamma Wave"] = "Medium";
+            InitializeBrainMetrics();
 
-            // Load placeholder chat messages
-            LoadPlaceholderChatMessages();
+            // Initialize stream timer
+            streamTimer = new System.Timers.Timer(1000);
+            streamTimer.Elapsed += OnStreamTimerElapsed;
         }
 
         /// <summary>
-        /// Loads placeholder chat messages for demonstration
+        /// Initializes brain metrics with default values
         /// </summary>
-        private void LoadPlaceholderChatMessages()
+        private void InitializeBrainMetrics()
         {
-            ChatMessages.Add(ChatMessage.CreateViewerMessage("User1", "Hello everyone!"));
-            ChatMessages.Add(ChatMessage.CreateViewerMessage("User2", "Great stream today!"));
-            ChatMessages.Add(ChatMessage.CreateViewerMessage("User3", "How's your focus level now?"));
-            ChatMessages.Add(ChatMessage.CreateViewerMessage("User4", "Brain data looks interesting!"));
-            ChatMessages.Add(ChatMessage.CreateViewerMessage("User5", "What sensitivity settings are you using?"));
+            BrainMetrics = new Dictionary<string, string>
+            {
+                { "Focus", "0%" },
+                { "Alpha Wave", "Low" },
+                { "Beta Wave", "Low" },
+                { "Theta Wave", "Low" },
+                { "Delta Wave", "Low" },
+                { "Gamma Wave", "Low" }
+            };
         }
 
         /// <summary>
-        /// Initialize when page appears
+        /// Called when the page appears
         /// </summary>
         public async Task OnAppearingAsync()
         {
+            // Check if OBS is connected
+            IsConnectedToObs = obsService.IsConnected;
+
+            if (IsConnectedToObs)
+            {
+                await RefreshObsInfoAsync();
+            }
+
+            // Check if a BCI device is connected
+            if (deviceManager.CurrentDevice != null && deviceManager.CurrentDevice.IsConnected)
+            {
+                StatusMessage = "BCI device connected. Ready to stream.";
+            }
+            else
+            {
+                StatusMessage = "No BCI device connected. Connect a device in Your Devices.";
+            }
+        }
+
+        #region Command Implementations
+
+        /// <summary>
+        /// Connects to OBS
+        /// </summary>
+        private async Task ConnectToObsAsync()
+        {
             try
             {
-                if (!IsInitialized)
+                StatusMessage = "Connecting to OBS...";
+
+                await obsService.ConnectAsync();
+
+                // Wait a moment for connection events to process
+                await Task.Delay(500);
+
+                if (obsService.IsConnected)
                 {
-                    // Start the stream timer
-                    StartStreamTimer();
-
-                    // Start brain data updates
-                    StartBrainDataUpdates();
-
-                    // Simulate stream starting
-                    streamStartTime = DateTime.Now;
-                    StatusMessage = "Stream started successfully - All systems nominal";
-
-                    IsInitialized = true;
+                    await RefreshObsInfoAsync();
+                    StatusMessage = "Connected to OBS";
+                }
+                else
+                {
+                    StatusMessage = "Failed to connect to OBS";
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error in OnAppearingAsync: {ex.Message}");
-                StatusMessage = $"Error: {ex.Message}";
+                StatusMessage = $"OBS connection error: {ex.Message}";
             }
         }
 
         /// <summary>
-        /// Starts the stream timer
+        /// Refreshes OBS information
         /// </summary>
-        private void StartStreamTimer()
+        private async Task RefreshObsInfoAsync()
         {
+            if (!obsService.IsConnected)
+                return;
+
             try
             {
-                streamTimer = Application.Current.Dispatcher.CreateTimer();
-                streamTimer.Interval = TimeSpan.FromSeconds(1);
-                streamTimer.Tick += (s, e) =>
-                {
-                    // Update stream time
-                    var elapsed = DateTime.Now - streamStartTime;
-                    StreamTimeDisplay = $"{elapsed.Hours:D2}:{elapsed.Minutes:D2}:{elapsed.Seconds:D2}";
+                // Get available scenes
+                AvailableScenes = await obsService.GetScenesAsync();
 
-                    // Periodically update viewer count (for demonstration)
-                    if (new Random().Next(0, 10) == 0)
-                    {
-                        ViewerCount += new Random().Next(-2, 5);
-                        if (ViewerCount < 0) ViewerCount = 0;
-                    }
-                };
+                // Get current scene
+                ObsScene = obsService.CurrentScene;
+
+                // Get streaming status
+                var streamStatus = await obsService.GetStreamStatusAsync();
+                IsLive = streamStatus.IsActive;
+
+                if (IsLive && !streamTimer.Enabled)
+                {
+                    // Start timer if streaming is active
+                    streamStartTime = DateTime.Now.AddMilliseconds(-streamStatus.Duration);
+                    streamTimer.Start();
+                    UpdateStreamTimeDisplay();
+                }
+                else if (!IsLive && streamTimer.Enabled)
+                {
+                    streamTimer.Stop();
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error refreshing OBS info: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// Starts the stream
+        /// </summary>
+        private async Task StartStreamAsync()
+        {
+            if (IsLive)
+                return;
+
+            try
+            {
+                StatusMessage = "Starting stream...";
+
+                // Check if OBS is connected
+                if (!obsService.IsConnected)
+                {
+                    StatusMessage = "OBS is not connected";
+                    return;
+                }
+
+                // Check if a BCI device is connected
+                if (deviceManager.CurrentDevice == null || !deviceManager.CurrentDevice.IsConnected)
+                {
+                    StatusMessage = "No BCI device connected";
+                    return;
+                }
+
+                // Start streaming in OBS
+                await obsService.StartStreamingAsync();
+
+                // Start brain data monitoring
+                await brainDataObsHelper.StartMonitoringAsync(true);
+
+                // Start the stream timer
+                streamStartTime = DateTime.Now;
                 streamTimer.Start();
+                UpdateStreamTimeDisplay();
+
+                // Set status
+                StatusMessage = "Stream started";
+                IsLive = true;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error starting stream timer: {ex.Message}");
+                StatusMessage = $"Error starting stream: {ex.Message}";
             }
         }
 
         /// <summary>
-        /// Starts brain data updates
+        /// Ends the stream
         /// </summary>
-        private void StartBrainDataUpdates()
+        private async Task EndStreamAsync()
         {
+            if (!IsLive)
+                return;
+
             try
             {
-                brainDataTimer = Application.Current.Dispatcher.CreateTimer();
-                brainDataTimer.Interval = TimeSpan.FromSeconds(5);
-                brainDataTimer.Tick += (s, e) =>
-                {
-                    // Simulate brain data updates (for demonstration)
-                    var random = new Random();
-                    BrainMetrics["Focus"] = $"{random.Next(75, 95)}%";
+                StatusMessage = "Ending stream...";
 
-                    string[] levels = { "Low", "Medium", "High" };
-                    BrainMetrics["Alpha Wave"] = levels[random.Next(0, levels.Length)];
-                    BrainMetrics["Beta Wave"] = levels[random.Next(0, levels.Length)];
+                // Stop streaming in OBS
+                await obsService.StopStreamingAsync();
 
-                    // Occasionally add a brain event
-                    if (random.Next(0, 5) == 0)
-                    {
-                        BrainEventCount++;
-                        StatusMessage = "Brain event detected - Processing...";
-                    }
-                    else
-                    {
-                        StatusMessage = "Streaming successfully - All systems nominal";
-                    }
+                // Stop brain data monitoring
+                await brainDataObsHelper.StopMonitoringAsync();
 
-                    // Update UI
-                    OnPropertyChanged(nameof(BrainMetrics));
-                };
-                brainDataTimer.Start();
+                // Stop the stream timer
+                streamTimer.Stop();
+
+                // Set status
+                StatusMessage = "Stream ended";
+                IsLive = false;
+
+                // Reset brain event count
+                BrainEventCount = 0;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error starting brain data updates: {ex.Message}");
+                StatusMessage = $"Error ending stream: {ex.Message}";
             }
         }
 
         /// <summary>
-        /// Toggles the camera
+        /// Toggles the camera source visibility
         /// </summary>
-        private void ToggleCamera()
+        private async Task ToggleCameraAsync()
         {
-            CameraEnabled = !CameraEnabled;
-            StatusMessage = CameraEnabled ? "Camera enabled" : "Camera disabled";
-        }
+            if (!obsService.IsConnected)
+                return;
 
-        /// <summary>
-        /// Toggles the microphone
-        /// </summary>
-        private void ToggleMic()
-        {
-            MicEnabled = !MicEnabled;
-            StatusMessage = MicEnabled ? "Microphone enabled" : "Microphone disabled";
-        }
-
-        /// <summary>
-        /// Toggles brain data display
-        /// </summary>
-        private void ToggleBrainData()
-        {
-            BrainDataEnabled = !BrainDataEnabled;
-            StatusMessage = BrainDataEnabled ? "Brain data display enabled" : "Brain data display disabled";
-        }
-
-        /// <summary>
-        /// Shows stream quality options
-        /// </summary>
-        private async Task ShowStreamQualityOptionsAsync()
-        {
-            var quality = await Shell.Current.DisplayActionSheet(
-                "Stream Quality",
-                "Cancel",
-                null,
-                "1080p60fps",
-                "1080p30fps",
-                "720p60fps",
-                "720p30fps",
-                "480p30fps");
-
-            if (!string.IsNullOrEmpty(quality) && quality != "Cancel")
+            try
             {
-                StreamQuality = quality;
-                StatusMessage = $"Stream quality changed to {quality}";
+                // Toggle camera state
+                CameraEnabled = !CameraEnabled;
+
+                // Update OBS source visibility
+                await obsService.SetSourceVisibilityAsync(ObsScene, "Camera", CameraEnabled);
             }
-        }
-
-        /// <summary>
-        /// Shows more stream options
-        /// </summary>
-        private async Task ShowMoreOptionsAsync()
-        {
-            var option = await Shell.Current.DisplayActionSheet(
-                "Stream Options",
-                "Cancel",
-                null,
-                "Edit Stream Info",
-                "Change Game",
-                "Stream Settings",
-                "Network Diagnostics",
-                "Help");
-
-            if (!string.IsNullOrEmpty(option) && option != "Cancel")
+            catch (Exception ex)
             {
-                StatusMessage = $"Selected option: {option}";
-
-                // Handle specific options
-                if (option == "Edit Stream Info")
-                {
-                    await EditStreamInfoAsync();
-                }
+                StatusMessage = $"Error toggling camera: {ex.Message}";
             }
         }
 
         /// <summary>
-        /// Edits stream information
+        /// Toggles the microphone mute state
         /// </summary>
-        private async Task EditStreamInfoAsync()
+        private async Task ToggleMicAsync()
         {
-            var newTitle = await Shell.Current.DisplayPromptAsync(
-                "Edit Stream Title",
-                "Enter a new stream title:",
-                initialValue: StreamTitle);
+            if (!obsService.IsConnected)
+                return;
 
-            if (!string.IsNullOrEmpty(newTitle))
+            try
             {
-                StreamTitle = newTitle;
-                StatusMessage = "Stream title updated";
+                // Toggle mic state
+                MicEnabled = !MicEnabled;
+
+                // Find the mic source and toggle its mute state
+                await obsService.SetSourceVisibilityAsync(ObsScene, "Microphone", MicEnabled);
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error toggling microphone: {ex.Message}";
             }
         }
 
         /// <summary>
-        /// Configures brain data display
+        /// Toggles the brain data visualization visibility
+        /// </summary>
+        private async Task ToggleBrainDataAsync()
+        {
+            if (!obsService.IsConnected)
+                return;
+
+            try
+            {
+                // Toggle brain data visibility
+                IsBrainDataVisible = !IsBrainDataVisible;
+
+                // Update OBS source visibility
+                await obsService.SetSourceVisibilityAsync(ObsScene,
+                    obsService.BrainDataSourceName, IsBrainDataVisible);
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error toggling brain data: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// Opens the brain data configuration dialog
         /// </summary>
         private async Task ConfigureBrainDataAsync()
         {
-            var option = await Shell.Current.DisplayActionSheet(
-                "Brain Data Configuration",
-                "Cancel",
-                null,
-                "Basic Display",
-                "Detailed Display",
-                "Focus Mode",
-                "Alpha/Beta Mode",
-                "Custom Layout");
+            // This would typically open a dialog to configure brain data settings
+            await Task.CompletedTask;
+        }
 
-            if (!string.IsNullOrEmpty(option) && option != "Cancel")
+        /// <summary>
+        /// Marks a highlight in the stream
+        /// </summary>
+        private async Task MarkHighlightAsync()
+        {
+            if (!IsLive || !obsService.IsConnected)
+                return;
+
+            try
             {
-                StatusMessage = $"Brain data display set to {option}";
+                // Create a highlight event
+                await brainDataObsHelper.HandleSignificantBrainEventAsync(
+                    "UserHighlight",
+                    $"User marked a highlight at {StreamTimeDisplay}");
+
+                StatusMessage = "Highlight marked";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error marking highlight: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// Takes a screenshot of the stream
+        /// </summary>
+        private async Task TakeScreenshotAsync()
+        {
+            if (!obsService.IsConnected)
+                return;
+
+            try
+            {
+                StatusMessage = "Taking screenshot...";
+
+                // Take a screenshot
+                string path = await obsService.TakeScreenshotAsync(null);
+
+                StatusMessage = $"Screenshot saved to {path}";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error taking screenshot: {ex.Message}";
             }
         }
 
         /// <summary>
         /// Sends a chat message
         /// </summary>
-        private void SendChatMessage()
+        private async Task SendChatMessageAsync()
         {
             if (string.IsNullOrWhiteSpace(ChatMessageInput))
                 return;
 
-            ChatMessages.Add(ChatMessage.CreateStreamerMessage("You (Streamer)", ChatMessageInput));
-
-            ChatMessageInput = "";
-
-            // Simulate a response (for demonstration)
-            Task.Delay(2000).ContinueWith(_ =>
+            try
             {
-                var responseUser = "User" + new Random().Next(1, 10);
-                MainThread.BeginInvokeOnMainThread(() =>
-                {
-                    ChatMessages.Add(ChatMessage.CreateViewerMessage(responseUser, "Thanks for the info!"));
-                });
-            });
-        }
+                // In a real implementation, this would send a message to the streaming platform
+                StatusMessage = $"Message sent: {ChatMessageInput}";
 
-        /// <summary>
-        /// Takes a screenshot of the current stream
-        /// </summary>
-        private void TakeScreenshot()
-        {
-            // In a real implementation, this would capture a screenshot
-            StatusMessage = "Screenshot captured!";
-        }
-
-        /// <summary>
-        /// Marks a stream highlight
-        /// </summary>
-        private void MarkHighlight()
-        {
-            // In a real implementation, this would mark a highlight in the stream
-            StatusMessage = "Stream highlight marked! (Last 30 seconds)";
+                // Clear the input
+                ChatMessageInput = "";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error sending message: {ex.Message}";
+            }
         }
 
         /// <summary>
         /// Shares a brain event with viewers
         /// </summary>
-        private void ShareBrainEvent()
+        private async Task ShareBrainEventAsync()
         {
-            // In a real implementation, this would share a brain event with viewers
-            StatusMessage = "Brain event shared with viewers!";
+            if (!IsLive)
+                return;
 
-            // Add a chat message about the shared event
-            ChatMessages.Add(ChatMessage.CreateSystemMessage("Streamer shared a brain event: Focus spike to 95%!"));
-        }
-
-        /// <summary>
-        /// Ends the stream after confirmation
-        /// </summary>
-        private async Task EndStreamAsync()
-        {
-            var confirm = await Shell.Current.DisplayAlert(
-                "End Stream",
-                "Are you sure you want to end the current stream?",
-                "End Stream",
-                "Cancel");
-
-            if (confirm)
+            try
             {
-                // Stop timers
-                streamTimer?.Stop();
-                brainDataTimer?.Stop();
+                // Create a custom brain event based on current metrics
+                string eventDescription = "Check out my brain activity!";
 
-                // In a real implementation, this would end the stream
-                StatusMessage = "Ending stream...";
-                IsLive = false;
+                if (BrainMetrics.TryGetValue("Focus", out string focus))
+                {
+                    eventDescription = $"My focus level is {focus}";
+                }
 
-                // Show a summary
-                await Shell.Current.DisplayAlert(
-                    "Stream Summary",
-                    $"Stream duration: {StreamTimeDisplay}\n" +
-                    $"Peak viewers: {ViewerCount}\n" +
-                    $"Brain events: {BrainEventCount}",
-                    "OK");
+                // Create a brain event
+                await brainDataObsHelper.HandleSignificantBrainEventAsync(
+                    "UserShared", eventDescription);
 
-                // Close the window
-                await Shell.Current.Navigation.PopModalAsync();
+                StatusMessage = "Brain event shared with viewers";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error sharing brain event: {ex.Message}";
             }
         }
 
         /// <summary>
-        /// Confirms exit from the stream window
+        /// Shows a confirmation dialog when exiting
         /// </summary>
-        public async void ConfirmExitAsync()
+        private async Task ShowExitConfirmationAsync()
         {
             if (IsLive)
             {
-                await EndStreamAsync();
+                bool confirm = await Shell.Current.DisplayAlert(
+                    "End Stream?",
+                    "You are currently streaming. Are you sure you want to exit and end the stream?",
+                    "End Stream", "Cancel");
+
+                if (confirm)
+                {
+                    await EndStreamAsync();
+                    await Shell.Current.GoToAsync("..");
+                }
             }
             else
             {
-                await Shell.Current.Navigation.PopModalAsync();
+                await Shell.Current.GoToAsync("..");
             }
         }
 
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
+        #endregion
 
-        protected virtual void Dispose(bool disposing)
+        #region Event Handlers
+
+        /// <summary>
+        /// Handles OBS connection status changes
+        /// </summary>
+        private void OnObsConnectionStatusChanged(object sender, bool connected)
         {
-            if (!_disposed)
+            IsConnectedToObs = connected;
+
+            if (connected)
             {
-                if (disposing)
-                {
-                    // Stop timers
-                    streamTimer?.Stop();
-                    brainDataTimer?.Stop();
-                }
-
-                _disposed = true;
+                StatusMessage = "Connected to OBS";
+                // Refresh OBS info
+                MainThread.BeginInvokeOnMainThread(async () => await RefreshObsInfoAsync());
+            }
+            else
+            {
+                StatusMessage = "Disconnected from OBS";
             }
         }
+
+        /// <summary>
+        /// Handles OBS streaming status changes
+        /// </summary>
+        private void OnObsStreamingStatusChanged(object sender, bool streaming)
+        {
+            IsLive = streaming;
+
+            if (streaming)
+            {
+                streamStartTime = DateTime.Now;
+                streamTimer.Start();
+                UpdateStreamTimeDisplay();
+                StatusMessage = "Stream started";
+            }
+            else
+            {
+                streamTimer.Stop();
+                StatusMessage = "Stream ended";
+            }
+        }
+
+        /// <summary>
+        /// Handles OBS scene changes
+        /// </summary>
+        private void OnObsSceneChanged(object sender, string sceneName)
+        {
+            ObsScene = sceneName;
+        }
+
+        /// <summary>
+        /// Handles brain metrics updates
+        /// </summary>
+        private void OnBrainMetricsUpdated(object sender, Dictionary<string, string> metrics)
+        {
+            BrainMetrics = new Dictionary<string, string>(metrics);
+        }
+
+        /// <summary>
+        /// Handles significant brain events
+        /// </summary>
+        private void OnSignificantBrainEventDetected(object sender, string eventDescription)
+        {
+            BrainEventCount++;
+            StatusMessage = $"Brain event: {eventDescription}";
+        }
+
+        /// <summary>
+        /// Handles brain data errors
+        /// </summary>
+        private void OnBrainDataError(object sender, Exception ex)
+        {
+            StatusMessage = $"Brain data error: {ex.Message}";
+        }
+
+        /// <summary>
+        /// Handles streaming service status changes
+        /// </summary>
+        private void OnStreamingStatusChanged(object sender, StreamingStatus status)
+        {
+            IsLive = status == StreamingStatus.Streaming;
+
+            if (status == StreamingStatus.Error)
+            {
+                StatusMessage = "Streaming error";
+            }
+        }
+
+        /// <summary>
+        /// Handles streaming statistics updates
+        /// </summary>
+        private void OnStreamingStatsUpdated(object sender, StreamingStatistics stats)
+        {
+            ViewerCount = stats.ViewerCount;
+
+            // Update stream health based on dropped frames and bit rate
+            if (stats.DroppedFrames > 100 || stats.CurrentBitrate < 1000000)
+            {
+                StreamHealth = "Poor";
+            }
+            else if (stats.DroppedFrames > 10 || stats.CurrentBitrate < 3000000)
+            {
+                StreamHealth = "Fair";
+            }
+            else
+            {
+                StreamHealth = "Good";
+            }
+        }
+
+        /// <summary>
+        /// Updates the stream time display
+        /// </summary>
+        private void OnStreamTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            UpdateStreamTimeDisplay();
+        }
+
+        /// <summary>
+        /// Updates the stream time display
+        /// </summary>
+        private void UpdateStreamTimeDisplay()
+        {
+            TimeSpan elapsed = DateTime.Now - streamStartTime;
+            StreamTimeDisplay = $"{elapsed.Hours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}";
+        }
+        #endregion
     }
 }

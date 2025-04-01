@@ -65,6 +65,8 @@
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.1" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+		<PackageReference Include="obs-websocket-dotnet" Version="5.0.0.3" />
+		<PackageReference Include="WebSocketSharp-netstandard" Version="1.0.1" />
 	</ItemGroup>
 
 	<!-- Native libraries - Debug configuration for Windows -->
@@ -109,6 +111,7 @@
 		<Folder Include="Models\BCI\" />
 		<Folder Include="Models\BCI\Common\" />
 		<Folder Include="Models\BCI\Muse\" />
+		<Folder Include="Resources\FFmpeg\" />
 		<Folder Include="Services\BCI\Common\" />
 		<Folder Include="Services\BCI\Factory\" />
 		<Folder Include="Services\BCI\Interfaces\" />

@@ -5,6 +5,9 @@ using NeuroSpectator.Services;
 using NeuroSpectator.Services.Authentication;
 using NeuroSpectator.Services.Storage;
 using NeuroSpectator.Services.Account;
+using NeuroSpectator.Services.Streaming;
+using NeuroSpectator.Services.Visualisation;
+using NeuroSpectator.Services.Integration; // Add this for BrainDataOBSHelper
 using Microsoft.Extensions.DependencyInjection;
 using CommunityToolkit.Maui;
 
@@ -39,15 +42,17 @@ public static class MauiProgram
         builder.Services.AddBCIServices();
         builder.Services.AddApplicationServices();
 
-        // Register authentication and storage services
+        // Register OBS and visualization services
+        builder.Services.AddSingleton<OBSIntegrationService>();
+        builder.Services.AddSingleton<BrainDataVisualisationService>();
+        builder.Services.AddSingleton<BrainDataJsonService>();
 
-        // Use offline authentication service templates
-        //builder.Services.AddSingleton<AuthenticationService, DebugAuthenticationService>();
-        //builder.Services.AddSingleton<UserStorageService>(serviceProvider =>
-        //    new DebugUserStorageService());
-        // Use real services
+        // Register the new BrainDataOBSHelper service
+        builder.Services.AddSingleton<BrainDataOBSHelper>();
+
+        // Register authentication and storage services
         builder.Services.AddSingleton<AuthenticationService>();
-        builder.Services.AddSingleton<UserStorageService>(serviceProvider => 
+        builder.Services.AddSingleton<UserStorageService>(serviceProvider =>
             new UserStorageService(
                 "DefaultEndpointsProtocol=https;AccountName=neurospectatorstorage;AccountKey=ZaiVwMLyTtZ/KP6EnhzbWWYvDHCMgEdg6ASouE1edz5c8tHTaApus7dUNtEaskEnXbOgvJCCH7g++AStWjVNTg==;EndpointSuffix=core.windows.net")); // Replace with your connection string
 

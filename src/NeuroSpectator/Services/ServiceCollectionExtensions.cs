@@ -5,6 +5,8 @@ using NeuroSpectator.Services.BCI.Interfaces;
 using NeuroSpectator.Services.BCI.Muse.Core;
 using NeuroSpectator.Services.BCI.Muse.Platform;
 using NeuroSpectator.Services;
+using NeuroSpectator.Services.Streaming;
+using NeuroSpectator.Services.Visualisation;
 
 namespace NeuroSpectator.Services
 {
@@ -35,12 +37,32 @@ namespace NeuroSpectator.Services
         }
 
         /// <summary>
+        /// Adds streaming services to the service collection
+        /// </summary>
+        public static IServiceCollection AddStreamingServices(this IServiceCollection services)
+        {
+            // Register OBS integration service
+            services.AddSingleton<OBSIntegrationService>();
+
+            // Register streaming service for MK.IO
+            services.AddSingleton<IMKIOStreamingService, MKIOStreamingService>();
+
+            // Register brain data visualization service
+            services.AddSingleton<BrainDataVisualisationService>();
+
+            return services;
+        }
+
+        /// <summary>
         /// Adds application services to the service collection
         /// </summary>
         public static IServiceCollection AddApplicationServices(this IServiceCollection services)
         {
             // Register the device settings service
             services.AddSingleton<DeviceSettingsService>();
+
+            // Register streaming services
+            services.AddStreamingServices();
 
             // Add other application services here
 

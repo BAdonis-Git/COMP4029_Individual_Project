@@ -49,12 +49,29 @@ namespace NeuroSpectator.Pages
             }
         }
 
+        protected override async void OnDisappearing()
+        {
+            try
+            {
+                base.OnDisappearing();
+
+                // Clean up resources when the page disappears
+                // This helps ensure resources are properly released
+                // even if the page is closed without confirmation
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error in StreamStreamerPage.OnDisappearing: {ex.Message}");
+            }
+        }
+
         protected override bool OnBackButtonPressed()
         {
             // Ask for confirmation before closing the stream window
             if (_viewModel != null)
             {
-                _viewModel.ConfirmExitAsync();
+                // Call the confirmation method in the view model
+                _viewModel.ConfirmExitAsync.Execute(null);  // Changed from ConfirmExitAsync() to ConfirmExitAsync.Execute(null)
                 return true; // We're handling the back button
             }
             return base.OnBackButtonPressed();
