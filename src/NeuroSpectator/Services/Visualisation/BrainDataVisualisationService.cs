@@ -86,6 +86,13 @@ namespace NeuroSpectator.Services.Visualisation
 
             try
             {
+                // Ensure the OBS template is available
+                await EnsureOBSTemplateAvailableAsync();
+
+                // Generate initial visualisations
+                await GenerateVisualisationsAsync();
+
+                // Start the HTTP server
                 httpListener = new HttpListener();
                 httpListener.Prefixes.Add($"{baseUrl}/");
                 httpListener.Start();
@@ -94,9 +101,6 @@ namespace NeuroSpectator.Services.Visualisation
 
                 // Start listening for requests
                 _ = Task.Run(() => ListenForRequestsAsync(serverCancellationToken.Token));
-
-                // Generate initial visualisation
-                await GenerateVisualisationsAsync();
 
                 Console.WriteLine($"Brain data visualisation server started at {baseUrl}");
             }
@@ -510,5 +514,339 @@ namespace NeuroSpectator.Services.Visualisation
                 isDisposed = true;
             }
         }
+
+        // Add these methods to BrainDataVisualisationService.cs
+
+        /// <summary>
+        /// Ensures the OBS overlay template is available on the server
+        /// </summary>
+        public async Task EnsureOBSTemplateAvailableAsync()
+        {
+            string obsTemplateHtmlPath = Path.Combine(visualisationDirectory, "brain_data_obs.html");
+
+            // Check if the template already exists
+            if (!File.Exists(obsTemplateHtmlPath))
+            {
+                // Create the OBS-optimized template
+                await File.WriteAllTextAsync(obsTemplateHtmlPath, GetOBSBrainDataTemplate());
+            }
+        }
+
+        /// <summary>
+        /// Gets the OBS-optimized brain data visualization template
+        /// </summary>
+        private string GetOBSBrainDataTemplate()
+        {
+            // This is the OBS-optimized template with transparent background and responsive layout
+            return @"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""utf-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1"">
+    <title>NeuroSpectator Brain Data</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background-color: transparent;
+            color: white;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        
+        .container {
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            backdrop-filter: blur(5px);
+            padding: 15px;
+            box-sizing: border-box;
+        }
+        
+        .title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #B388FF;
+            margin-bottom: 15px;
+            text-align: center;
+            text-transform: uppercase;
+        }
+        
+        .metrics {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+        }
+        
+        .metric {
+            background-color: rgba(30, 30, 30, 0.7);
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .metric-name {
+            font-size: 14px;
+            font-weight: bold;
+            color: #AAAAAA;
+            margin-bottom: 5px;
+        }
+        
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .focus {
+            grid-column: span 1;
+        }
+        
+        .high {
+            color: #92D36E;
+        }
+        
+        .medium {
+            color: #FFD740;
+        }
+        
+        .low {
+            color: #AAAAAA;
+        }
+        
+        .focus-meter {
+            width: 100%;
+            height: 8px;
+            background-color: #222;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+        
+        .focus-value {
+            height: 100%;
+            background-color: #92D36E;
+            transition: width 0.5s ease;
+        }
+        
+        .event-log {
+            margin-top: 15px;
+            font-size: 12px;
+            color: #CCCCCC;
+            max-height: 80px;
+            overflow-y: auto;
+        }
+        
+        .event {
+            margin-bottom: 5px;
+            padding: 5px;
+            background-color: rgba(30, 30, 30, 0.5);
+            border-radius: 4px;
+        }
+        
+        .event.highlight {
+            background-color: rgba(179, 136, 255, 0.2);
+            color: #B388FF;
+            font-weight: bold;
+        }
+        
+        /* Animation for brain events */
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .pulse {
+            animation: pulse 1s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+    <div class=""container"">
+        <div class=""title"">Brain Metrics</div>
+        <div class=""metrics"">
+            <!-- Focus metric -->
+            <div class=""metric focus"">
+                <div class=""metric-name"">FOCUS LEVEL</div>
+                <div class=""metric-value high"" id=""focus-value"">0%</div>
+                <div class=""focus-meter"">
+                    <div class=""focus-value"" id=""focus-bar"" style=""width: 0%""></div>
+                </div>
+            </div>
+            
+            <!-- Alpha Wave -->
+            <div class=""metric"">
+                <div class=""metric-name"">ALPHA WAVE</div>
+                <div class=""metric-value low"" id=""alpha-value"">Low</div>
+            </div>
+            
+            <!-- Beta Wave -->
+            <div class=""metric"">
+                <div class=""metric-name"">BETA WAVE</div>
+                <div class=""metric-value low"" id=""beta-value"">Low</div>
+            </div>
+            
+            <!-- Theta Wave -->
+            <div class=""metric"">
+                <div class=""metric-name"">THETA WAVE</div>
+                <div class=""metric-value low"" id=""theta-value"">Low</div>
+            </div>
+            
+            <!-- Recent Events -->
+            <div class=""event-log"" id=""event-log"">
+                <!-- Events will be added here dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Auto-refresh data every second
+        const REFRESH_INTERVAL = 1000;
+        
+        // Keep track of last values for change detection
+        let lastMetrics = {};
+        
+        // Elements
+        const focusValue = document.getElementById('focus-value');
+        const focusBar = document.getElementById('focus-bar');
+        const alphaValue = document.getElementById('alpha-value');
+        const betaValue = document.getElementById('beta-value');
+        const thetaValue = document.getElementById('theta-value');
+        const eventLog = document.getElementById('event-log');
+        
+        // Set value class based on level
+        function setValueClass(element, value) {
+            element.classList.remove('high', 'medium', 'low');
+            
+            if (value === 'High') {
+                element.classList.add('high');
+            } else if (value === 'Medium') {
+                element.classList.add('medium');
+            } else {
+                element.classList.add('low');
+            }
+        }
+        
+        // Add an event to the log
+        function addEvent(text, highlight = false) {
+            const event = document.createElement('div');
+            event.className = 'event' + (highlight ? ' highlight' : '');
+            event.textContent = text;
+            
+            // Add to the top of the log
+            eventLog.insertBefore(event, eventLog.firstChild);
+            
+            // Limit to 5 events
+            if (eventLog.children.length > 5) {
+                eventLog.removeChild(eventLog.lastChild);
+            }
+            
+            // Apply pulse animation to the container
+            document.querySelector('.container').classList.add('pulse');
+            setTimeout(() => {
+                document.querySelector('.container').classList.remove('pulse');
+            }, 1000);
+        }
+        
+        // Check for significant changes
+        function checkForSignificantChanges(newMetrics) {
+            if (!lastMetrics.Focus && newMetrics.Focus) {
+                // First data received
+                lastMetrics = {...newMetrics};
+                return;
+            }
+            
+            // Check focus changes
+            if (lastMetrics.Focus && newMetrics.Focus) {
+                const oldFocus = parseInt(lastMetrics.Focus.replace('%', ''));
+                const newFocus = parseInt(newMetrics.Focus.replace('%', ''));
+                
+                if (Math.abs(newFocus - oldFocus) >= 20) {
+                    // Change of 20% or more is significant
+                    const direction = newFocus > oldFocus ? 'increased' : 'decreased';
+                    addEvent(`Focus ${direction} to ${newFocus}%`, true);
+                }
+            }
+            
+            // Check wave changes
+            const waveTypes = ['Alpha Wave', 'Beta Wave', 'Theta Wave'];
+            waveTypes.forEach(wave => {
+                if (lastMetrics[wave] !== newMetrics[wave] && 
+                    lastMetrics[wave] !== undefined && 
+                    newMetrics[wave] !== undefined) {
+                    
+                    if ((lastMetrics[wave] === 'Low' && newMetrics[wave] === 'High') || 
+                        (lastMetrics[wave] === 'High' && newMetrics[wave] === 'Low')) {
+                        // Significant wave change
+                        addEvent(`${wave} changed to ${newMetrics[wave]}`);
+                    }
+                }
+            });
+            
+            // Update last metrics
+            lastMetrics = {...newMetrics};
+        }
+        
+        // Update the display with new data
+        function updateDisplay(data) {
+            if (!data) return;
+            
+            // Update focus
+            if (data.Focus) {
+                focusValue.textContent = data.Focus;
+                const focusPercent = parseInt(data.Focus.replace('%', ''));
+                focusBar.style.width = `${focusPercent}%`;
+            }
+            
+            // Update alpha wave
+            if (data['Alpha Wave']) {
+                alphaValue.textContent = data['Alpha Wave'];
+                setValueClass(alphaValue, data['Alpha Wave']);
+            }
+            
+            // Update beta wave
+            if (data['Beta Wave']) {
+                betaValue.textContent = data['Beta Wave'];
+                setValueClass(betaValue, data['Beta Wave']);
+            }
+            
+            // Update theta wave
+            if (data['Theta Wave']) {
+                thetaValue.textContent = data['Theta Wave'];
+                setValueClass(thetaValue, data['Theta Wave']);
+            }
+            
+            // Check for significant changes
+            checkForSignificantChanges(data);
+        }
+        
+        // Fetch data periodically
+        function fetchData() {
+            fetch('/data')
+                .then(response => response.json())
+                .then(data => {
+                    updateDisplay(data.metrics);
+                    
+                    // If there's a current event, display it
+                    if (data.currentEvent) {
+                        addEvent(`${data.currentEvent.EventType}: ${data.currentEvent.Description}`, true);
+                    }
+                })
+                .catch(error => console.error('Error fetching data:', error))
+                .finally(() => {
+                    // Schedule next update
+                    setTimeout(fetchData, REFRESH_INTERVAL);
+                });
+        }
+        
+        // Start fetching data
+        fetchData();
+    </script>
+</body>
+</html>";
+        }
+
     }
 }

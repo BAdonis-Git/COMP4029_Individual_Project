@@ -11,6 +11,10 @@
 
     <ContentPage.Resources>
         <utilities:ZeroValueConverter x:Key="ZeroConverter" />
+        <utilities:StreamHealthColorConverter x:Key="StreamHealthColorConverter" />
+        <utilities:WaveLevelColorConverter x:Key="WaveLevelColorConverter" />
+        <utilities:PercentageConverter x:Key="PercentageConverter" />
+
         <Style x:Key="HeaderLabelStyle" TargetType="Label">
             <Setter Property="FontSize" Value="20"/>
             <Setter Property="TextColor" Value="#CCCCCC"/>
@@ -110,14 +114,41 @@
     <Grid RowDefinitions="Auto,*,Auto" ColumnDefinitions="2*,*">
         <!-- Top Controls -->
         <Grid Grid.Row="0" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*,Auto">
-            <!-- OBS Connection Status -->
-            <VerticalStackLayout Grid.Column="0" Margin="10,0">
-                <Label Text="OBS Status:" TextColor="#AAAAAA" FontSize="14"/>
-                <Label IsVisible="{Binding IsConnectedToObs}" Text="CONNECTED" Style="{StaticResource ConnectedTagStyle}" Margin="0,5,0,0"/>
-                <Label IsVisible="{Binding IsConnectedToObs, Converter={StaticResource ZeroConverter}}" Text="DISCONNECTED" Style="{StaticResource DisconnectedTagStyle}" Margin="0,5,0,0"/>
-                <Button Command="{Binding ConnectToObsCommand}" Text="Connect to OBS" Style="{StaticResource PrimaryButtonStyle}" IsVisible="{Binding IsConnectedToObs, Converter={StaticResource ZeroConverter}}" Margin="0,5,0,0"/>
-                <Button Command="{Binding RefreshObsInfoCommand}" Text="Refresh OBS Info" Style="{StaticResource ControlButtonStyle}" IsVisible="{Binding IsConnectedToObs}" Margin="0,5,0,0"/>
-            </VerticalStackLayout>
+            <!-- OBS Connection Status and Setup -->
+            <Grid Grid.Column="0" Margin="10,0">
+                <VerticalStackLayout>
+                    <Label Text="OBS Status:" TextColor="#AAAAAA" FontSize="14"/>
+                    <Label IsVisible="{Binding IsConnectedToObs}" Text="CONNECTED" Style="{StaticResource ConnectedTagStyle}" Margin="0,5,0,0"/>
+                    <Label IsVisible="{Binding IsConnectedToObs, Converter={StaticResource ZeroConverter}}" Text="DISCONNECTED" Style="{StaticResource DisconnectedTagStyle}" Margin="0,5,0,0"/>
+                    <Button Command="{Binding ConnectToObsCommand}" Text="Connect to OBS" Style="{StaticResource PrimaryButtonStyle}" IsVisible="{Binding IsConnectedToObs, Converter={StaticResource ZeroConverter}}" Margin="0,5,0,0"/>
+                    <Button Command="{Binding RefreshObsInfoCommand}" Text="Refresh OBS Info" Style="{StaticResource ControlButtonStyle}" IsVisible="{Binding IsConnectedToObs}" Margin="0,5,0,0"/>
+
+                    <!-- OBS Setup Options - New Section -->
+                    <VerticalStackLayout IsVisible="{Binding IsConnectedToObs}" Margin="0,10,0,0">
+                        <Label Text="OBS Setup:" TextColor="#AAAAAA" FontSize="14"/>
+                        <Button Text="Auto-Configure OBS" 
+                                Command="{Binding AutoConfigureOBSCommand}" 
+                                Style="{StaticResource PrimaryButtonStyle}" 
+                                IsVisible="{Binding IsSetupComplete, Converter={StaticResource ZeroConverter}}"
+                                IsEnabled="{Binding IsAutoConfiguringObs, Converter={StaticResource ZeroConverter}}" 
+                                Margin="0,5,0,0"/>
+                        <Button Text="Setup in Progress..." 
+                                Style="{StaticResource DisabledButtonStyle}" 
+                                IsVisible="{Binding IsAutoConfiguringObs}" 
+                                IsEnabled="False" 
+                                Margin="0,5,0,0"/>
+                        <Button Text="OBS Setup Guide" 
+                                Command="{Binding ShowOBSSetupGuideCommand}" 
+                                Style="{StaticResource ControlButtonStyle}" 
+                                Margin="0,5,0,0"/>
+                        <Label Text="✓ OBS Configured" 
+                               TextColor="#92D36E" 
+                               FontAttributes="Bold" 
+                               IsVisible="{Binding IsSetupComplete}" 
+                               Margin="0,5,0,0"/>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Grid>
 
             <!-- Stream Title -->
             <StackLayout Grid.Column="1" HorizontalOptions="Center" VerticalOptions="Center">

@@ -6,6 +6,7 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NeuroSpectator.Models.BCI.Common;
+using NeuroSpectator.Pages;
 using NeuroSpectator.Services;
 using NeuroSpectator.Services.BCI.Interfaces;
 
@@ -149,20 +150,27 @@ namespace NeuroSpectator.PageModels
                 // Check if a device is connected
                 if (!IsConnected)
                 {
-                    await Shell.Current.DisplayAlert("No Device Connected",
+                    var result = await Shell.Current.DisplayAlert("No Device Connected",
                         "You need to connect a BCI device before starting a stream. Would you like to connect a device now?",
                         "Yes", "No");
 
-                    // Navigate to devices page if user chooses to connect a device
-                    await Shell.Current.GoToAsync("//YourDevicesPage");
+                    if (result)
+                    {
+                        // Navigate to devices page if user chooses to connect a device
+                        await Shell.Current.GoToAsync("//YourDevicesPage");
+                    }
                     return;
                 }
 
-                // In a real implementation, this would open a streaming window
-                // For now, just show a placeholder alert
-                await Shell.Current.DisplayAlert("Start Stream",
-                    "This would open a dedicated streaming window for the streamer.",
-                    "OK");
+                // Create a new window for the streaming page
+                var streamWindow = new Window
+                {
+                    Page = new StreamStreamerPage(MauiProgram.Services.GetService<StreamStreamerPageModel>()),
+                    Title = "NeuroSpectator Stream"
+                };
+
+                // Add the window to the application
+                Application.Current.OpenWindow(streamWindow);
             }
             catch (Exception ex)
             {

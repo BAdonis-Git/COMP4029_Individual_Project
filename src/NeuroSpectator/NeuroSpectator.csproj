@@ -111,7 +111,6 @@
 		<Folder Include="Models\BCI\" />
 		<Folder Include="Models\BCI\Common\" />
 		<Folder Include="Models\BCI\Muse\" />
-		<Folder Include="Resources\FFmpeg\" />
 		<Folder Include="Services\BCI\Common\" />
 		<Folder Include="Services\BCI\Factory\" />
 		<Folder Include="Services\BCI\Interfaces\" />

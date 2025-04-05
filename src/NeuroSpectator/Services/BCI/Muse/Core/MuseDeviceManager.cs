@@ -19,6 +19,8 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
     {
         private readonly MuseManager museManager;
         private readonly SemaphoreSlim semaphore = new(1, 1);
+        private readonly DeviceConnectionManager connectionManager;
+        private readonly IDispatcher dispatcher;
         private bool isScanning;
         private bool isDisposed;
 
@@ -34,8 +36,11 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
         /// <summary>
         /// Creates a new instance of the MuseDeviceManager class
         /// </summary>
-        public MuseDeviceManager()
+        public MuseDeviceManager(IDispatcher dispatcher = null, DeviceConnectionManager connectionManager = null)
         {
+            this.dispatcher = dispatcher;
+            this.connectionManager = connectionManager;
+
             try
             {
                 // Check and extract native libraries if needed
@@ -151,7 +156,7 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
                 Console.WriteLine($"Connecting to device: {museInfo.Name} ({museInfo.BluetoothMac})");
 
                 // Create a new device instance
-                var device = new MuseDevice(museInfo);
+                var device = new MuseDevice(museInfo, dispatcher, connectionManager);
 
                 try
                 {
@@ -166,6 +171,9 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
 
                         // Set as current device
                         CurrentDevice = device;
+
+                        // Register the device with the connection manager if available
+                        connectionManager?.RegisterDevice(device);
 
                         // Return the device
                         return device;
@@ -209,6 +217,9 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
             await semaphore.WaitAsync();
             try
             {
+                // Unregister the device from the connection manager if available
+                connectionManager?.UnregisterDevice(CurrentDevice);
+
                 await CurrentDevice.DisconnectAsync();
                 CurrentDevice.Dispose();
                 CurrentDevice = null;
@@ -235,10 +246,15 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
             {
                 var muses = museManager.GetMuses();
                 var deviceInfos = new List<IBCIDeviceInfo>();
+                var uniqueMacs = new HashSet<string>(); // Add this line to track unique devices
 
                 // Convert Muse SDK objects to our model objects properly
                 foreach (var muse in muses)
                 {
+                    // Skip duplicates by MAC address
+                    if (!uniqueMacs.Add(muse.BluetoothMac)) // Add this line to skip duplicates
+                        continue;
+
                     // Create a MuseDeviceInfo object from the Muse SDK object
                     var deviceInfo = new MuseDeviceInfo
                     {
@@ -251,17 +267,17 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
                 }
 
                 // Update UI on the main thread
-                MainThread.BeginInvokeOnMainThread(() =>
+                if (dispatcher != null)
                 {
-                    AvailableDevices.Clear();
-                    foreach (var deviceInfo in deviceInfos)
+                    dispatcher.Dispatch(() =>
                     {
-                        AvailableDevices.Add(deviceInfo);
-                    }
-
-                    // Notify subscribers
-                    DeviceListChanged?.Invoke(this, deviceInfos);
-                });
+                        UpdateAvailableDevices(deviceInfos);
+                    });
+                }
+                else
+                {
+                    UpdateAvailableDevices(deviceInfos);
+                }
             }
             catch (Exception ex)
             {
@@ -274,6 +290,75 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
                     ex,
                     BCIErrorType.Unknown));
             }
+
+        }
+
+        /// <summary>
+        /// Updates the available devices list
+        /// </summary>
+        private void UpdateAvailableDevices(List<IBCIDeviceInfo> deviceInfos)
+        {
+            // Deduplicate devices based on MAC address
+            var uniqueDevices = deviceInfos
+                .GroupBy(d => d.DeviceId)
+                .Select(g => g.First())
+                .ToList();
+
+            // Update the available devices collection
+            AvailableDevices.Clear();
+            foreach (var deviceInfo in uniqueDevices)
+            {
+                AvailableDevices.Add(deviceInfo);
+            }
+
+            // Notify subscribers
+            DeviceListChanged?.Invoke(this, uniqueDevices);
+
+            // Check for automatic reconnection if needed
+            TryReconnectToLastDeviceIfNeeded();
+        }
+
+        /// <summary>
+        /// Tries to reconnect to the last connected device if needed
+        /// </summary>
+        private async void TryReconnectToLastDeviceIfNeeded()
+        {
+            // If we have no current device but there are available devices,
+            // and we have a previously connected device ID saved, try to reconnect
+            if (CurrentDevice == null && AvailableDevices.Count > 0)
+            {
+                string lastDeviceId = await GetLastConnectedDeviceIdAsync();
+                if (!string.IsNullOrEmpty(lastDeviceId))
+                {
+                    // Look for the last connected device in the available devices
+                    var lastDevice = AvailableDevices.FirstOrDefault(d => d.DeviceId == lastDeviceId);
+                    if (lastDevice != null)
+                    {
+                        // Try to reconnect
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await ConnectToDeviceAsync(lastDevice);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Auto-reconnect failed: {ex.Message}");
+                            }
+                        });
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets the ID of the last connected device
+        /// </summary>
+        private async Task<string> GetLastConnectedDeviceIdAsync()
+        {
+            // This would typically load from app settings or preferences
+            // For now, we'll just return null
+            return null;
         }
 
         /// <summary>

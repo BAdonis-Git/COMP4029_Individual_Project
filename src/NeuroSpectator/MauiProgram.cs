@@ -7,9 +7,12 @@ using NeuroSpectator.Services.Storage;
 using NeuroSpectator.Services.Account;
 using NeuroSpectator.Services.Streaming;
 using NeuroSpectator.Services.Visualisation;
-using NeuroSpectator.Services.Integration; // Add this for BrainDataOBSHelper
+using NeuroSpectator.Services.Integration;
+using NeuroSpectator.Services.BCI.Interfaces;
+using NeuroSpectator.Services.BCI;
 using Microsoft.Extensions.DependencyInjection;
 using CommunityToolkit.Maui;
+using NeuroSpectator.Services.BCI;
 
 namespace NeuroSpectator;
 
@@ -38,6 +41,9 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
 
+        // Register device connection manager
+        builder.Services.AddSingleton<DeviceConnectionManager>();
+
         // Register services
         builder.Services.AddBCIServices();
         builder.Services.AddApplicationServices();
@@ -47,8 +53,36 @@ public static class MauiProgram
         builder.Services.AddSingleton<BrainDataVisualisationService>();
         builder.Services.AddSingleton<BrainDataJsonService>();
 
-        // Register the new BrainDataOBSHelper service
-        builder.Services.AddSingleton<BrainDataOBSHelper>();
+        // Register the BrainDataOBSHelper with explicit dependencies
+        builder.Services.AddSingleton<BrainDataOBSHelper>(serviceProvider =>
+        {
+            var deviceManager = serviceProvider.GetRequiredService<IBCIDeviceManager>();
+            var obsService = serviceProvider.GetRequiredService<OBSIntegrationService>();
+            var visualizationService = serviceProvider.GetRequiredService<BrainDataVisualisationService>();
+            var jsonService = serviceProvider.GetRequiredService<BrainDataJsonService>();
+
+            // Handle potential null current device
+            var device = deviceManager.CurrentDevice ?? deviceManager.GetDefaultDeviceOrNull();
+
+            if (device == null)
+            {
+                throw new InvalidOperationException("No BCI device available for BrainDataOBSHelper");
+            }
+
+            return new BrainDataOBSHelper(
+                device,
+                obsService,
+                visualizationService,
+                jsonService
+            );
+        });
+
+        // Register the OBSSetupGuide
+        builder.Services.AddTransient<OBSSetupGuide>(serviceProvider =>
+            new OBSSetupGuide(
+                serviceProvider.GetRequiredService<OBSIntegrationService>(),
+                serviceProvider.GetRequiredService<BrainDataVisualisationService>()
+            ));
 
         // Register authentication and storage services
         builder.Services.AddSingleton<AuthenticationService>();
@@ -89,5 +123,35 @@ public static class MauiProgram
         var app = builder.Build();
         Services = app.Services;
         return app;
+    }
+}
+
+// Extension method for IBCIDeviceManager to handle null CurrentDevice
+public static class BCIDeviceManagerExtensions
+{
+    public static IBCIDevice GetDefaultDeviceOrNull(this IBCIDeviceManager deviceManager)
+    {
+        if (deviceManager == null)
+            return null;
+
+        // Check if there are any available devices
+        if (deviceManager.AvailableDevices.Count > 0)
+        {
+            // Try to connect to the first available device
+            var deviceInfo = deviceManager.AvailableDevices[0];
+            try
+            {
+                // This is an async call, but we need a sync result
+                // Not ideal, but necessary for this specific use case
+                return deviceManager.ConnectToDeviceAsync(deviceInfo).GetAwaiter().GetResult();
+            }
+            catch
+            {
+                // Failed to connect, return null
+                return null;
+            }
+        }
+
+        return null;
     }
 }

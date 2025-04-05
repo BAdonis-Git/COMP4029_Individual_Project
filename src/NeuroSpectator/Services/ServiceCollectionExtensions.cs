@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using NeuroSpectator.Services.BCI;
 using NeuroSpectator.Models.BCI.Common;
 using NeuroSpectator.Services.BCI.Factory;
 using NeuroSpectator.Services.BCI.Interfaces;
@@ -32,6 +33,9 @@ namespace NeuroSpectator.Services
 
             // Register Muse-specific services explicitly for use cases that need them directly
             services.AddSingleton<MuseDeviceManager>();
+
+            // Register the Device Connection Manager
+            services.AddSingleton<DeviceConnectionManager>();
 
             return services;
         }

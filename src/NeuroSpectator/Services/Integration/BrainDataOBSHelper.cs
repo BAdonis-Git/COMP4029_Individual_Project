@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Maui.Dispatching;
 using NeuroSpectator.Models.BCI.Common;
 using NeuroSpectator.Services.BCI.Interfaces;
 using NeuroSpectator.Services.Streaming;
@@ -10,85 +10,68 @@ using NeuroSpectator.Services.Visualisation;
 namespace NeuroSpectator.Services.Integration
 {
     /// <summary>
-    /// Service to coordinate brain data acquisition and OBS integration
+    /// Helper class for processing BCI data and integrating it with OBS
     /// </summary>
     public class BrainDataOBSHelper : IDisposable
     {
-        private readonly IDispatcher dispatcher;
         private readonly IBCIDevice bciDevice;
         private readonly OBSIntegrationService obsService;
         private readonly BrainDataVisualisationService visualizationService;
         private readonly BrainDataJsonService jsonService;
 
+        private CancellationTokenSource monitoringCancellationSource;
+        private Task monitoringTask;
         private Dictionary<string, string> currentBrainMetrics = new Dictionary<string, string>();
-        private List<string> significantEvents = new List<string>();
-        private bool isMonitoring = false;
-        private bool isDisposed = false;
+        private bool isDisposed;
 
-        // Thresholds for brain events
-        private const double FOCUS_THRESHOLD_HIGH = 0.8;    // 80% focus is high
-        private const double FOCUS_THRESHOLD_LOW = 0.3;     // 30% focus is low
-        private const double ALPHA_THRESHOLD_HIGH = 0.7;    // 70% alpha is high
-        private const double ALPHA_THRESHOLD_LOW = 0.3;     // 30% alpha is low
+        // Thresholds for significant brain events
+        private const double FOCUS_THRESHOLD_HIGH = 0.8; // 80%
+        private const double FOCUS_THRESHOLD_JUMP = 0.2; // 20% sudden increase
+        private const double ALPHA_THRESHOLD_HIGH = 70.0;
+        private const double BETA_THRESHOLD_HIGH = 60.0;
 
-        // OBS scene configuration
-        private string activeScene;
-        private string brainDataSourceName = "NeuroSpectator Brain Data";
-        private string eventHighlightSourceName = "BrainEventHighlight";
+        // Last values for change detection
+        private double lastFocusLevel = 0;
+        private double lastAlphaLevel = 0;
+        private double lastBetaLevel = 0;
 
-        /// <summary>
-        /// Gets the current brain metrics
-        /// </summary>
-        public Dictionary<string, string> CurrentBrainMetrics => new Dictionary<string, string>(currentBrainMetrics);
-
-        /// <summary>
-        /// Event fired when brain metrics are updated
-        /// </summary>
+        // Event handlers
         public event EventHandler<Dictionary<string, string>> BrainMetricsUpdated;
-
-        /// <summary>
-        /// Event fired when a significant brain event is detected
-        /// </summary>
         public event EventHandler<string> SignificantBrainEventDetected;
+        public event EventHandler<Exception> ErrorOccurred;
 
         /// <summary>
-        /// Event fired when an error occurs
+        /// Gets the visualization service used by this helper
         /// </summary>
-        public event EventHandler<Exception> ErrorOccurred;
+        public BrainDataVisualisationService VisualizationService => visualizationService;
+
+        /// <summary>
+        /// Gets the JSON service used by this helper
+        /// </summary>
+        public BrainDataJsonService JsonService => jsonService;
 
         /// <summary>
         /// Creates a new instance of the BrainDataOBSHelper
         /// </summary>
         public BrainDataOBSHelper(
-            IDispatcher dispatcher,
             IBCIDevice bciDevice,
             OBSIntegrationService obsService,
             BrainDataVisualisationService visualizationService,
             BrainDataJsonService jsonService)
         {
-            this.dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
             this.bciDevice = bciDevice ?? throw new ArgumentNullException(nameof(bciDevice));
             this.obsService = obsService ?? throw new ArgumentNullException(nameof(obsService));
             this.visualizationService = visualizationService ?? throw new ArgumentNullException(nameof(visualizationService));
             this.jsonService = jsonService ?? throw new ArgumentNullException(nameof(jsonService));
 
-            // Subscribe to BCI device events
-            this.bciDevice.BrainWaveDataReceived += OnBrainWaveDataReceived;
-            this.bciDevice.ArtifactDetected += OnArtifactDetected;
-            this.bciDevice.ErrorOccurred += OnBCIErrorOccurred;
-
-            // Subscribe to OBS events
-            this.obsService.SceneChanged += OnOBSSceneChanged;
-            this.obsService.ConnectionStatusChanged += OnOBSConnectionStatusChanged;
-
-            // Initialize brain metrics with default values
-            InitializeBrainMetrics();
+            // Initialize default brain metrics
+            InitializeDefaultBrainMetrics();
         }
 
         /// <summary>
-        /// Initializes brain metrics with default values
+        /// Initializes default brain metrics
         /// </summary>
-        private void InitializeBrainMetrics()
+        private void InitializeDefaultBrainMetrics()
         {
             currentBrainMetrics["Focus"] = "0%";
             currentBrainMetrics["Alpha Wave"] = "Low";
@@ -99,42 +82,48 @@ namespace NeuroSpectator.Services.Integration
         }
 
         /// <summary>
-        /// Starts monitoring brain data and syncing with OBS
+        /// Starts monitoring brain data and integrating with OBS
         /// </summary>
-        public async Task StartMonitoringAsync(bool setupOBSScene = true)
+        public async Task StartMonitoringAsync(bool setupVisualizationSources = false)
         {
-            if (isMonitoring)
+            if (monitoringTask != null && !monitoringTask.IsCompleted)
                 return;
 
             try
             {
-                // Check if we're connected to the device and OBS
+                // Make sure the device is connected
                 if (!bciDevice.IsConnected)
                 {
-                    throw new InvalidOperationException("BCI device is not connected");
+                    await bciDevice.ConnectAsync();
                 }
 
-                // Set up OBS integration if requested
-                if (setupOBSScene && obsService.IsConnected)
+                // Start the HTTP server for visualizations if not already running
+                if (visualizationService != null && !visualizationService.IsServerRunning)
                 {
-                    // Get active scene
-                    activeScene = obsService.CurrentScene;
-
-                    // Set up OBS scene with brain data visualization
-                    await obsService.SetupBrainDataVisualizationAsync(activeScene);
-                    brainDataSourceName = obsService.BrainDataSourceName;
+                    await visualizationService.StartServerAsync();
                 }
 
-                // Start the visualization server
-                await visualizationService.StartServerAsync();
+                // Set up OBS browser sources if needed
+                if (setupVisualizationSources && obsService.IsConnected)
+                {
+                    string currentScene = obsService.CurrentScene;
+                    if (!string.IsNullOrEmpty(currentScene))
+                    {
+                        await obsService.SetupBrainDataVisualizationAsync(currentScene);
+                    }
+                }
 
-                // Register for brain wave data
+                // Register for all brain wave types
                 bciDevice.RegisterForBrainWaveData(BrainWaveTypes.All);
 
-                isMonitoring = true;
+                // Subscribe to brain wave data events
+                bciDevice.BrainWaveDataReceived += OnBrainWaveDataReceived;
+                bciDevice.ArtifactDetected += OnArtifactDetected;
+                bciDevice.ErrorOccurred += OnBciErrorOccurred;
 
-                // Initial sync of data
-                await SyncBrainDataWithOBSAsync();
+                // Start the monitoring task
+                monitoringCancellationSource = new CancellationTokenSource();
+                monitoringTask = Task.Run(() => MonitoringLoopAsync(monitoringCancellationSource.Token));
             }
             catch (Exception ex)
             {
@@ -148,43 +137,82 @@ namespace NeuroSpectator.Services.Integration
         /// </summary>
         public async Task StopMonitoringAsync()
         {
-            if (!isMonitoring)
+            if (monitoringTask == null || monitoringTask.IsCompleted)
                 return;
 
             try
             {
-                // Unregister from brain wave data
-                bciDevice.UnregisterFromBrainWaveData(BrainWaveTypes.All);
+                // Cancel the monitoring task
+                monitoringCancellationSource?.Cancel();
 
-                // Stop the visualization server
-                await visualizationService.StopServerAsync();
+                // Wait for the task to complete
+                await monitoringTask;
 
-                isMonitoring = false;
+                // Unregister from brain wave data events
+                if (bciDevice != null)
+                {
+                    bciDevice.BrainWaveDataReceived -= OnBrainWaveDataReceived;
+                    bciDevice.ArtifactDetected -= OnArtifactDetected;
+                    bciDevice.ErrorOccurred -= OnBciErrorOccurred;
+
+                    // Unregister from all brain wave types
+                    bciDevice.UnregisterFromBrainWaveData(BrainWaveTypes.All);
+                }
             }
             catch (Exception ex)
             {
                 ErrorOccurred?.Invoke(this, ex);
+                throw;
+            }
+            finally
+            {
+                monitoringCancellationSource?.Dispose();
+                monitoringCancellationSource = null;
+                monitoringTask = null;
             }
         }
 
         /// <summary>
-        /// Syncs the current brain data with OBS
+        /// Main monitoring loop that updates visualizations
         /// </summary>
-        public async Task SyncBrainDataWithOBSAsync()
+        private async Task MonitoringLoopAsync(CancellationToken cancellationToken)
         {
-            if (!isMonitoring || !obsService.IsConnected)
-                return;
-
             try
             {
-                // First update the visualization data
-                await visualizationService.UpdateBrainMetricsAsync(currentBrainMetrics);
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    // Update the visualizations
+                    try
+                    {
+                        // Update visualization services with current brain metrics
+                        if (visualizationService != null)
+                        {
+                            await visualizationService.UpdateBrainMetricsAsync(currentBrainMetrics);
+                        }
 
-                // Then update the OBS sources
-                await obsService.SyncBrainDataWithOBSAsync(currentBrainMetrics);
+                        if (jsonService != null)
+                        {
+                            await jsonService.UpdateDataAsync(currentBrainMetrics);
+                        }
 
-                // Also update the JSON data for other integrations
-                await jsonService.UpdateDataAsync(currentBrainMetrics);
+                        // Sync with OBS if connected
+                        if (obsService != null && obsService.IsConnected)
+                        {
+                            await obsService.SyncBrainDataWithOBSAsync(currentBrainMetrics);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        ErrorOccurred?.Invoke(this, ex);
+                    }
+
+                    // Wait for the next update interval (100ms)
+                    await Task.Delay(100, cancellationToken);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // This is expected when cancellation is requested
             }
             catch (Exception ex)
             {
@@ -193,32 +221,29 @@ namespace NeuroSpectator.Services.Integration
         }
 
         /// <summary>
-        /// Handles a significant brain event by updating OBS
+        /// Handles significant brain events detected during monitoring
         /// </summary>
         public async Task HandleSignificantBrainEventAsync(string eventType, string description)
         {
             try
             {
-                // Add to significant events
-                significantEvents.Add($"[{DateTime.Now:HH:mm:ss}] {eventType}: {description}");
+                // Log the event
+                Console.WriteLine($"Brain event: {eventType} - {description}");
 
-                // Only keep the last 10 events
-                if (significantEvents.Count > 10)
+                // Notify subscribers
+                SignificantBrainEventDetected?.Invoke(this, description);
+
+                // Add an event marker to the brain data visualization
+                if (jsonService != null)
                 {
-                    significantEvents.RemoveAt(0);
+                    await jsonService.AddEventMarkerAsync(eventType, description);
                 }
 
-                // Update the JSON data with an event marker
-                await jsonService.AddEventMarkerAsync(eventType, description);
-
-                // Update OBS with the event
-                if (obsService.IsConnected)
+                // Highlight the event in OBS if connected
+                if (obsService != null && obsService.IsConnected)
                 {
                     await obsService.HighlightBrainEventAsync(eventType, description);
                 }
-
-                // Notify subscribers
-                SignificantBrainEventDetected?.Invoke(this, $"{eventType}: {description}");
             }
             catch (Exception ex)
             {
@@ -227,212 +252,171 @@ namespace NeuroSpectator.Services.Integration
         }
 
         /// <summary>
-        /// Updates brain metrics based on raw brain wave data
+        /// Processes received brain wave data
         /// </summary>
-        private async Task ProcessBrainWaveDataAsync(BrainWaveTypes waveType, double value)
+        private void OnBrainWaveDataReceived(object sender, BrainWaveDataEventArgs e)
         {
-            // Update the corresponding metric
-            switch (waveType)
+            try
+            {
+                // Process the brain wave data based on type
+                ProcessBrainWaveData(e.BrainWaveData);
+
+                // Check for significant events
+                CheckForSignificantEvents();
+
+                // Notify subscribers of updated metrics
+                BrainMetricsUpdated?.Invoke(this, currentBrainMetrics);
+            }
+            catch (Exception ex)
+            {
+                ErrorOccurred?.Invoke(this, ex);
+            }
+        }
+
+        /// <summary>
+        /// Processes a brain wave data packet
+        /// </summary>
+        private void ProcessBrainWaveData(BrainWaveData data)
+        {
+            switch (data.WaveType)
             {
                 case BrainWaveTypes.Alpha:
-                    UpdateWaveMetric("Alpha Wave", value);
+                    double alphaValue = data.AverageValue;
+                    lastAlphaLevel = alphaValue;
+                    currentBrainMetrics["Alpha Wave"] = ClassifyWaveLevel(alphaValue);
                     break;
 
                 case BrainWaveTypes.Beta:
-                    UpdateWaveMetric("Beta Wave", value);
+                    double betaValue = data.AverageValue;
+                    lastBetaLevel = betaValue;
+                    currentBrainMetrics["Beta Wave"] = ClassifyWaveLevel(betaValue);
                     break;
 
                 case BrainWaveTypes.Theta:
-                    UpdateWaveMetric("Theta Wave", value);
+                    double thetaValue = data.AverageValue;
+                    currentBrainMetrics["Theta Wave"] = ClassifyWaveLevel(thetaValue);
                     break;
 
                 case BrainWaveTypes.Delta:
-                    UpdateWaveMetric("Delta Wave", value);
+                    double deltaValue = data.AverageValue;
+                    currentBrainMetrics["Delta Wave"] = ClassifyWaveLevel(deltaValue);
                     break;
 
                 case BrainWaveTypes.Gamma:
-                    UpdateWaveMetric("Gamma Wave", value);
+                    double gammaValue = data.AverageValue;
+                    currentBrainMetrics["Gamma Wave"] = ClassifyWaveLevel(gammaValue);
                     break;
             }
 
-            // Calculate focus level based on beta/alpha ratio
-            if (currentBrainMetrics.TryGetValue("Beta Wave", out string betaLevel) &&
-                currentBrainMetrics.TryGetValue("Alpha Wave", out string alphaLevel))
+            // Calculate focus based on alpha and beta waves
+            // This is a simplified approach - focus could be calculated in different ways
+            if (lastAlphaLevel > 0 && lastBetaLevel > 0)
             {
-                double beta = ConvertLevelToValue(betaLevel);
-                double alpha = ConvertLevelToValue(alphaLevel);
+                // Higher beta-to-alpha ratio generally indicates higher focus
+                double focusLevel = Math.Min(1.0, Math.Max(0.0, lastBetaLevel / (lastAlphaLevel + lastBetaLevel)));
 
-                // Focus is roughly beta/alpha ratio, normalized to 0-100%
-                double betaAlphaRatio = alpha > 0 ? Math.Min(beta / alpha, 3.0) : 1.0;
-                double focusPercent = Math.Round(betaAlphaRatio / 3.0 * 100);
+                // Store the previous focus level for change detection
+                double previousFocus = lastFocusLevel;
+                lastFocusLevel = focusLevel;
 
-                // Update focus metric
-                string oldFocusValue = currentBrainMetrics["Focus"];
+                // Convert to percentage for display
+                int focusPercent = (int)(focusLevel * 100);
                 currentBrainMetrics["Focus"] = $"{focusPercent}%";
 
-                // Detect significant focus changes
-                if (!oldFocusValue.Equals(currentBrainMetrics["Focus"]))
+                // Check for significant focus change
+                double focusChange = focusLevel - previousFocus;
+                if (Math.Abs(focusChange) >= FOCUS_THRESHOLD_JUMP)
                 {
-                    double focusValue = ParseFocusPercentage(currentBrainMetrics["Focus"]);
-                    double oldFocusValueNum = ParseFocusPercentage(oldFocusValue);
-                    double focusDelta = focusValue - oldFocusValueNum;
+                    string direction = focusChange > 0 ? "increase" : "decrease";
+                    string description = $"Significant focus {direction} detected: {focusPercent}%";
 
-                    // Check for significant changes (>20% change)
-                    if (Math.Abs(focusDelta) > 20)
-                    {
-                        string eventType = focusDelta > 0 ? "FocusIncrease" : "FocusDecrease";
-                        string description = $"Focus level changed from {oldFocusValue} to {currentBrainMetrics["Focus"]}";
-                        await HandleSignificantBrainEventAsync(eventType, description);
-                    }
-                    // Check for high/low thresholds being crossed
-                    else if ((focusValue >= FOCUS_THRESHOLD_HIGH && oldFocusValueNum < FOCUS_THRESHOLD_HIGH) ||
-                             (focusValue <= FOCUS_THRESHOLD_LOW && oldFocusValueNum > FOCUS_THRESHOLD_LOW))
-                    {
-                        string eventType = focusValue >= FOCUS_THRESHOLD_HIGH ? "HighFocus" : "LowFocus";
-                        string description = $"Focus level is now {currentBrainMetrics["Focus"]}";
-                        await HandleSignificantBrainEventAsync(eventType, description);
-                    }
+                    // Handle asynchronously to avoid blocking the data processing
+                    Task.Run(() => HandleSignificantBrainEventAsync("FocusChange", description));
                 }
             }
-
-            // Notify subscribers
-            BrainMetricsUpdated?.Invoke(this, currentBrainMetrics);
-
-            // Sync with OBS if connected
-            await SyncBrainDataWithOBSAsync();
         }
 
         /// <summary>
-        /// Updates a wave metric based on its value
+        /// Classifies a wave level as Low, Medium, or High
         /// </summary>
-        private void UpdateWaveMetric(string metricName, double value)
+        private string ClassifyWaveLevel(double value)
         {
-            // For each wave type, categorize as Low, Medium, or High
-            // This is a simplified approach - real EEG would need more sophisticated analysis
-            string level;
-
-            if (value < 0.3)
-                level = "Low";
-            else if (value < 0.7)
-                level = "Medium";
+            // These thresholds would need to be calibrated for your specific BCI device
+            if (value < 30)
+                return "Low";
+            else if (value < 60)
+                return "Medium";
             else
-                level = "High";
-
-            // Update the metric
-            currentBrainMetrics[metricName] = level;
+                return "High";
         }
 
         /// <summary>
-        /// Converts a level string (Low, Medium, High) to a numeric value
+        /// Checks for significant brain events based on current metrics
         /// </summary>
-        private double ConvertLevelToValue(string level)
+        private void CheckForSignificantEvents()
         {
-            return level switch
+            // Check for high focus
+            if (lastFocusLevel >= FOCUS_THRESHOLD_HIGH &&
+                double.TryParse(currentBrainMetrics["Focus"].TrimEnd('%'), out double focusPercent) &&
+                focusPercent >= FOCUS_THRESHOLD_HIGH * 100)
             {
-                "Low" => 0.2,
-                "Medium" => 0.5,
-                "High" => 0.8,
-                _ => 0.0
-            };
-        }
-
-        /// <summary>
-        /// Parses a focus percentage string to a double
-        /// </summary>
-        private double ParseFocusPercentage(string focusValue)
-        {
-            if (focusValue.EndsWith("%"))
-            {
-                if (double.TryParse(focusValue.TrimEnd('%'), out double percent))
-                {
-                    return percent;
-                }
+                string description = $"High focus level detected: {focusPercent}%";
+                Task.Run(() => HandleSignificantBrainEventAsync("HighFocus", description));
             }
 
-            return 0.0;
+            // Check for high alpha activity
+            if (lastAlphaLevel >= ALPHA_THRESHOLD_HIGH &&
+                currentBrainMetrics["Alpha Wave"] == "High")
+            {
+                string description = $"High alpha wave activity detected: {lastAlphaLevel:F1}μV";
+                Task.Run(() => HandleSignificantBrainEventAsync("HighAlpha", description));
+            }
+
+            // Check for high beta activity
+            if (lastBetaLevel >= BETA_THRESHOLD_HIGH &&
+                currentBrainMetrics["Beta Wave"] == "High")
+            {
+                string description = $"High beta wave activity detected: {lastBetaLevel:F1}μV";
+                Task.Run(() => HandleSignificantBrainEventAsync("HighBeta", description));
+            }
         }
 
-        #region Event Handlers
-
         /// <summary>
-        /// Event handler for brain wave data received
+        /// Handles artifact detection from the BCI device
         /// </summary>
-        private async void OnBrainWaveDataReceived(object sender, BrainWaveDataEventArgs e)
+        private void OnArtifactDetected(object sender, ArtifactEventArgs e)
         {
-            dispatcher.Dispatch(async () =>
+            try
             {
-                await ProcessBrainWaveDataAsync(e.BrainWaveData.WaveType, e.BrainWaveData.AverageValue);
-            });
-        }
-
-        /// <summary>
-        /// Event handler for artifacts detected
-        /// </summary>
-        private async void OnArtifactDetected(object sender, ArtifactEventArgs e)
-        {
-            if (!isMonitoring)
-                return;
-
-            dispatcher.Dispatch(async () =>
-            {
-                // Handle blinks, jaw clenches, etc.
+                // Process artifacts like blinks, jaw clenches
                 if (e.Blink)
                 {
-                    await HandleSignificantBrainEventAsync("Blink", "Eye blink detected");
+                    Task.Run(() => HandleSignificantBrainEventAsync("Blink", "Eye blink detected"));
                 }
 
                 if (e.JawClench)
                 {
-                    await HandleSignificantBrainEventAsync("JawClench", "Jaw clench detected");
+                    Task.Run(() => HandleSignificantBrainEventAsync("JawClench", "Jaw clench detected"));
                 }
 
                 if (e.HeadbandTooLoose)
                 {
-                    // Update a status indicator
-                    currentBrainMetrics["Signal Quality"] = "Poor";
-                    await SyncBrainDataWithOBSAsync();
+                    Task.Run(() => HandleSignificantBrainEventAsync("HeadbandLoose", "Headband adjustment needed"));
                 }
-            });
+            }
+            catch (Exception ex)
+            {
+                ErrorOccurred?.Invoke(this, ex);
+            }
         }
 
         /// <summary>
-        /// Event handler for BCI device errors
+        /// Handles errors from the BCI device
         /// </summary>
-        private void OnBCIErrorOccurred(object sender, BCIErrorEventArgs e)
+        private void OnBciErrorOccurred(object sender, BCIErrorEventArgs e)
         {
             ErrorOccurred?.Invoke(this, e.Exception ?? new Exception(e.Message));
         }
-
-        /// <summary>
-        /// Event handler for OBS scene changes
-        /// </summary>
-        private async void OnOBSSceneChanged(object sender, string sceneName)
-        {
-            activeScene = sceneName;
-
-            // If we're monitoring, update the scene with brain data visualization
-            if (isMonitoring)
-            {
-                await SyncBrainDataWithOBSAsync();
-            }
-        }
-
-        /// <summary>
-        /// Event handler for OBS connection status changes
-        /// </summary>
-        private async void OnOBSConnectionStatusChanged(object sender, bool connected)
-        {
-            if (connected && isMonitoring)
-            {
-                // OBS just connected, set up the scene
-                activeScene = obsService.CurrentScene;
-                await obsService.SetupBrainDataVisualizationAsync(activeScene);
-                brainDataSourceName = obsService.BrainDataSourceName;
-                await SyncBrainDataWithOBSAsync();
-            }
-        }
-
-        #endregion
 
         /// <summary>
         /// Disposes of resources
@@ -446,31 +430,19 @@ namespace NeuroSpectator.Services.Integration
         /// <summary>
         /// Disposes of resources
         /// </summary>
-        protected virtual async void Dispose(bool disposing)
+        protected virtual void Dispose(bool disposing)
         {
             if (!isDisposed)
             {
                 if (disposing)
                 {
-                    // Stop monitoring
-                    if (isMonitoring)
+                    // Stop monitoring if active
+                    if (monitoringTask != null && !monitoringTask.IsCompleted)
                     {
-                        await StopMonitoringAsync();
+                        StopMonitoringAsync().ConfigureAwait(false).GetAwaiter().GetResult();
                     }
 
-                    // Unsubscribe from events
-                    if (bciDevice != null)
-                    {
-                        bciDevice.BrainWaveDataReceived -= OnBrainWaveDataReceived;
-                        bciDevice.ArtifactDetected -= OnArtifactDetected;
-                        bciDevice.ErrorOccurred -= OnBCIErrorOccurred;
-                    }
-
-                    if (obsService != null)
-                    {
-                        obsService.SceneChanged -= OnOBSSceneChanged;
-                        obsService.ConnectionStatusChanged -= OnOBSConnectionStatusChanged;
-                    }
+                    monitoringCancellationSource?.Dispose();
                 }
 
                 isDisposed = true;

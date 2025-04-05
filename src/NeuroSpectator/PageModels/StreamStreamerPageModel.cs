@@ -5,6 +5,7 @@ using System.Windows.Input;
 using Microsoft.Maui.Controls;
 using NeuroSpectator.Models.BCI.Common;
 using NeuroSpectator.Services.BCI.Interfaces;
+using NeuroSpectator.Services.BCI;
 using NeuroSpectator.Services.Integration;
 using NeuroSpectator.Services.Streaming;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -15,9 +16,12 @@ namespace NeuroSpectator.PageModels
     public partial class StreamStreamerPageModel : ObservableObject
     {
         private readonly IBCIDeviceManager deviceManager;
+        private readonly DeviceConnectionManager connectionManager;
         private readonly OBSIntegrationService obsService;
-        private readonly BrainDataOBSHelper brainDataObsHelper;
         private readonly IMKIOStreamingService streamingService;
+
+        // This will be created on demand when stream starts
+        private BrainDataOBSHelper brainDataObsHelper;
 
         #region Properties
 
@@ -38,6 +42,9 @@ namespace NeuroSpectator.PageModels
 
         [ObservableProperty]
         private bool isConnectedToObs = false;
+
+        [ObservableProperty]
+        private bool isDeviceConnected = false;
 
         [ObservableProperty]
         private bool isLive = false;
@@ -69,6 +76,12 @@ namespace NeuroSpectator.PageModels
         [ObservableProperty]
         private Dictionary<string, string> brainMetrics = new Dictionary<string, string>();
 
+        [ObservableProperty]
+        private bool isSetupComplete = false;
+
+        [ObservableProperty]
+        private bool isAutoConfiguringObs = false;
+
         // Timer for updating the stream time
         private System.Timers.Timer streamTimer;
         private DateTime streamStartTime;
@@ -90,18 +103,20 @@ namespace NeuroSpectator.PageModels
         public ICommand SendChatMessageCommand { get; }
         public ICommand ShareBrainEventCommand { get; }
         public ICommand ConfirmExitAsync { get; }
+        public ICommand AutoConfigureOBSCommand { get; }
+        public ICommand ShowOBSSetupGuideCommand { get; }
 
         #endregion
 
         public StreamStreamerPageModel(
             IBCIDeviceManager deviceManager,
+            DeviceConnectionManager connectionManager,
             OBSIntegrationService obsService,
-            BrainDataOBSHelper brainDataObsHelper,
             IMKIOStreamingService streamingService)
         {
             this.deviceManager = deviceManager;
+            this.connectionManager = connectionManager;
             this.obsService = obsService;
-            this.brainDataObsHelper = brainDataObsHelper;
             this.streamingService = streamingService;
 
             // Initialize commands
@@ -118,16 +133,15 @@ namespace NeuroSpectator.PageModels
             SendChatMessageCommand = new AsyncRelayCommand(SendChatMessageAsync);
             ShareBrainEventCommand = new AsyncRelayCommand(ShareBrainEventAsync);
             ConfirmExitAsync = new AsyncRelayCommand(ShowExitConfirmationAsync);
+            AutoConfigureOBSCommand = new AsyncRelayCommand(AutoConfigureOBSAsync);
+            ShowOBSSetupGuideCommand = new AsyncRelayCommand(ShowOBSSetupGuideAsync);
 
             // Subscribe to events
             obsService.ConnectionStatusChanged += OnObsConnectionStatusChanged;
             obsService.StreamingStatusChanged += OnObsStreamingStatusChanged;
             obsService.SceneChanged += OnObsSceneChanged;
 
-            brainDataObsHelper.BrainMetricsUpdated += OnBrainMetricsUpdated;
-            brainDataObsHelper.SignificantBrainEventDetected += OnSignificantBrainEventDetected;
-            brainDataObsHelper.ErrorOccurred += OnBrainDataError;
-
+            connectionManager.ConnectionStatusChanged += OnDeviceConnectionStatusChanged;
             streamingService.StatusChanged += OnStreamingStatusChanged;
             streamingService.StatisticsUpdated += OnStreamingStatsUpdated;
 
@@ -168,10 +182,22 @@ namespace NeuroSpectator.PageModels
                 await RefreshObsInfoAsync();
             }
 
-            // Check if a BCI device is connected
-            if (deviceManager.CurrentDevice != null && deviceManager.CurrentDevice.IsConnected)
+            // Check device connection status
+            await RefreshDeviceConnectionStatusAsync();
+        }
+
+        /// <summary>
+        /// Refreshes the device connection status
+        /// </summary>
+        private async Task RefreshDeviceConnectionStatusAsync()
+        {
+            // Check device connection status
+            var statusInfo = await connectionManager.RefreshConnectionStatusAsync();
+            IsDeviceConnected = statusInfo.IsConnected;
+
+            if (IsDeviceConnected)
             {
-                StatusMessage = "BCI device connected. Ready to stream.";
+                StatusMessage = $"Device '{statusInfo.DeviceName}' connected. Ready to stream.";
             }
             else
             {
@@ -269,17 +295,43 @@ namespace NeuroSpectator.PageModels
                 }
 
                 // Check if a BCI device is connected
-                if (deviceManager.CurrentDevice == null || !deviceManager.CurrentDevice.IsConnected)
+                await RefreshDeviceConnectionStatusAsync();
+                if (!IsDeviceConnected)
                 {
                     StatusMessage = "No BCI device connected";
                     return;
                 }
 
+                // Create the BrainDataOBSHelper now that we have a connected device
+                try
+                {
+                    // We'll create this using the service provider to ensure all dependencies are properly resolved
+                    brainDataObsHelper = MauiProgram.Services.GetService<BrainDataOBSHelper>();
+
+                    if (brainDataObsHelper != null)
+                    {
+                        // Subscribe to brain data events
+                        brainDataObsHelper.BrainMetricsUpdated += OnBrainMetricsUpdated;
+                        brainDataObsHelper.SignificantBrainEventDetected += OnSignificantBrainEventDetected;
+                        brainDataObsHelper.ErrorOccurred += OnBrainDataError;
+
+                        // Start brain data monitoring
+                        await brainDataObsHelper.StartMonitoringAsync(true);
+                    }
+                    else
+                    {
+                        StatusMessage = "Failed to initialize brain data helper";
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    StatusMessage = $"Error initializing brain data: {ex.Message}";
+                    return;
+                }
+
                 // Start streaming in OBS
                 await obsService.StartStreamingAsync();
-
-                // Start brain data monitoring
-                await brainDataObsHelper.StartMonitoringAsync(true);
 
                 // Start the stream timer
                 streamStartTime = DateTime.Now;
@@ -312,7 +364,15 @@ namespace NeuroSpectator.PageModels
                 await obsService.StopStreamingAsync();
 
                 // Stop brain data monitoring
-                await brainDataObsHelper.StopMonitoringAsync();
+                if (brainDataObsHelper != null)
+                {
+                    brainDataObsHelper.BrainMetricsUpdated -= OnBrainMetricsUpdated;
+                    brainDataObsHelper.SignificantBrainEventDetected -= OnSignificantBrainEventDetected;
+                    brainDataObsHelper.ErrorOccurred -= OnBrainDataError;
+
+                    await brainDataObsHelper.StopMonitoringAsync();
+                    brainDataObsHelper = null;
+                }
 
                 // Stop the stream timer
                 streamTimer.Stop();
@@ -411,7 +471,7 @@ namespace NeuroSpectator.PageModels
         /// </summary>
         private async Task MarkHighlightAsync()
         {
-            if (!IsLive || !obsService.IsConnected)
+            if (!IsLive || !obsService.IsConnected || brainDataObsHelper == null)
                 return;
 
             try
@@ -479,7 +539,7 @@ namespace NeuroSpectator.PageModels
         /// </summary>
         private async Task ShareBrainEventAsync()
         {
-            if (!IsLive)
+            if (!IsLive || brainDataObsHelper == null)
                 return;
 
             try
@@ -525,6 +585,76 @@ namespace NeuroSpectator.PageModels
             else
             {
                 await Shell.Current.GoToAsync("..");
+            }
+        }
+
+        /// <summary>
+        /// Auto-configures OBS for NeuroSpectator
+        /// </summary>
+        private async Task AutoConfigureOBSAsync()
+        {
+            if (!obsService.IsConnected)
+            {
+                StatusMessage = "Connect to OBS first";
+                return;
+            }
+
+            try
+            {
+                IsAutoConfiguringObs = true;
+                StatusMessage = "Auto-configuring OBS...";
+
+                // Create an OBS setup guide
+                var setupGuide = MauiProgram.Services.GetService<OBSSetupGuide>();
+
+                // Run the auto-configuration
+                bool success = await setupGuide.AutoConfigureOBSForNeuroSpectatorAsync();
+
+                if (success)
+                {
+                    StatusMessage = "OBS auto-configuration complete";
+                    IsSetupComplete = true;
+
+                    // Refresh OBS info
+                    await RefreshObsInfoAsync();
+                }
+                else
+                {
+                    StatusMessage = "OBS auto-configuration failed";
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error configuring OBS: {ex.Message}";
+            }
+            finally
+            {
+                IsAutoConfiguringObs = false;
+            }
+        }
+
+        /// <summary>
+        /// Shows the OBS setup guide
+        /// </summary>
+        private async Task ShowOBSSetupGuideAsync()
+        {
+            try
+            {
+                // Create an OBS setup guide
+                var setupGuide = MauiProgram.Services.GetService<OBSSetupGuide>();
+
+                // Get the manual setup guide
+                string guide = setupGuide.GetManualSetupGuide();
+
+                // Show a popup with the guide
+                await Application.Current.MainPage.DisplayAlert(
+                    "OBS Setup Guide",
+                    guide,
+                    "OK");
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error showing setup guide: {ex.Message}";
             }
         }
 
@@ -578,6 +708,29 @@ namespace NeuroSpectator.PageModels
         private void OnObsSceneChanged(object sender, string sceneName)
         {
             ObsScene = sceneName;
+        }
+
+        /// <summary>
+        /// Handles device connection status changes
+        /// </summary>
+        private void OnDeviceConnectionStatusChanged(object sender, ConnectionStatusChangedEventArgs e)
+        {
+            IsDeviceConnected = e.NewStatus == DeviceConnectionStatus.Connected;
+
+            if (e.NewStatus == DeviceConnectionStatus.Connected)
+            {
+                StatusMessage = "Device connected";
+            }
+            else
+            {
+                StatusMessage = "Device disconnected";
+
+                // If we're streaming and the device disconnects, we need to end the stream
+                if (IsLive)
+                {
+                    MainThread.BeginInvokeOnMainThread(async () => await EndStreamAsync());
+                }
+            }
         }
 
         /// <summary>
