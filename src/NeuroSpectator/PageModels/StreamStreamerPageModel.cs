@@ -216,7 +216,27 @@ namespace NeuroSpectator.PageModels
             {
                 StatusMessage = "Connecting to OBS...";
 
-                await obsService.ConnectAsync();
+                // Create a prompt for connection details
+                string websocketUrl = await Application.Current.MainPage.DisplayPromptAsync(
+                    "OBS Connection",
+                    "Enter WebSocket URL (including port)",
+                    initialValue: "ws://localhost:4444",
+                    maxLength: 100);
+
+                if (string.IsNullOrEmpty(websocketUrl))
+                {
+                    StatusMessage = "Connection canceled";
+                    return;
+                }
+
+                string password = await Application.Current.MainPage.DisplayPromptAsync(
+                    "OBS Connection",
+                    "Enter password (leave empty if none)",
+                    initialValue: "",
+                    maxLength: 100);
+
+                // Connect to OBS with the provided parameters
+                await obsService.ConnectAsync(websocketUrl, password);
 
                 // Wait a moment for connection events to process
                 await Task.Delay(500);

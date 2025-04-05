@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Maui.Networking;
 using NeuroSpectator.Services.BCI;
 using NeuroSpectator.Models.BCI.Common;
 using NeuroSpectator.Services.BCI.Factory;
@@ -45,6 +46,9 @@ namespace NeuroSpectator.Services
         /// </summary>
         public static IServiceCollection AddStreamingServices(this IServiceCollection services)
         {
+            // Register MAUI services needed for streaming
+            services.AddSingleton<IConnectivity>(provider => Connectivity.Current);
+
             // Register OBS integration service
             services.AddSingleton<OBSIntegrationService>();
 
