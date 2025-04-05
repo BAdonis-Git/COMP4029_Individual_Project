@@ -100,9 +100,46 @@ namespace NeuroSpectator.Services.Streaming
         {
             try
             {
-                // Connect to OBS
+                // Using a task completion source to properly wait for async operation
+                var tcs = new TaskCompletionSource<bool>();
+
+                // Setup event handlers for one-time connection events
+                EventHandler onConnected = null;
+                EventHandler<ObsDisconnectionInfo> onDisconnected = null;
+
+                onConnected = (s, e) => {
+                    obsWebsocket.Connected -= onConnected;
+                    obsWebsocket.Disconnected -= onDisconnected;
+                    tcs.TrySetResult(true);
+                };
+
+                onDisconnected = (s, e) => {
+                    obsWebsocket.Connected -= onConnected;
+                    obsWebsocket.Disconnected -= onDisconnected;
+                    tcs.TrySetException(new Exception($"Connection failed: {e.DisconnectReason}"));
+                };
+
+                // Register one-time event handlers
+                obsWebsocket.Connected += onConnected;
+                obsWebsocket.Disconnected += onDisconnected;
+
+                // Start connection attempt
                 obsWebsocket.ConnectAsync(url, password);
-                await Task.CompletedTask; // For async pattern consistency
+
+                // Set a timeout of 10 seconds
+                var timeoutTask = Task.Delay(10000);
+                var completedTask = await Task.WhenAny(tcs.Task, timeoutTask);
+
+                if (completedTask == timeoutTask)
+                {
+                    // Clean up event handlers
+                    obsWebsocket.Connected -= onConnected;
+                    obsWebsocket.Disconnected -= onDisconnected;
+                    throw new TimeoutException("Connection to OBS timed out after 10 seconds");
+                }
+
+                // Wait for the actual connection task to complete
+                await tcs.Task;
             }
             catch (AuthFailureException)
             {
