@@ -121,6 +121,7 @@
                     <Label IsVisible="{Binding IsConnectedToObs}" Text="CONNECTED" Style="{StaticResource ConnectedTagStyle}" Margin="0,5,0,0"/>
                     <Label IsVisible="{Binding IsConnectedToObs, Converter={StaticResource ZeroConverter}}" Text="DISCONNECTED" Style="{StaticResource DisconnectedTagStyle}" Margin="0,5,0,0"/>
                     <Button Command="{Binding ConnectToObsCommand}" Text="Connect to OBS" Style="{StaticResource PrimaryButtonStyle}" IsVisible="{Binding IsConnectedToObs, Converter={StaticResource ZeroConverter}}" Margin="0,5,0,0"/>
+                    <Button Command="{Binding DiagnoseObsCommand}" Text="Diagnose OBS" Style="{StaticResource ControlButtonStyle}" IsVisible="{Binding IsConnectedToObs, Converter={StaticResource ZeroConverter}}" Margin="0,5,0,0"/>
                     <Button Command="{Binding RefreshObsInfoCommand}" Text="Refresh OBS Info" Style="{StaticResource ControlButtonStyle}" IsVisible="{Binding IsConnectedToObs}" Margin="0,5,0,0"/>
 
                     <!-- OBS Setup Options - New Section -->

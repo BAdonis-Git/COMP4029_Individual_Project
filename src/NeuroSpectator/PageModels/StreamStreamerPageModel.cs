@@ -105,6 +105,7 @@ namespace NeuroSpectator.PageModels
         public ICommand ConfirmExitAsync { get; }
         public ICommand AutoConfigureOBSCommand { get; }
         public ICommand ShowOBSSetupGuideCommand { get; }
+        public ICommand DiagnoseObsCommand { get; }
 
         #endregion
 
@@ -135,6 +136,7 @@ namespace NeuroSpectator.PageModels
             ConfirmExitAsync = new AsyncRelayCommand(ShowExitConfirmationAsync);
             AutoConfigureOBSCommand = new AsyncRelayCommand(AutoConfigureOBSAsync);
             ShowOBSSetupGuideCommand = new AsyncRelayCommand(ShowOBSSetupGuideAsync);
+            DiagnoseObsCommand = new AsyncRelayCommand(DiagnoseOBSConnectionAsync);
 
             // Subscribe to events
             obsService.ConnectionStatusChanged += OnObsConnectionStatusChanged;
@@ -407,6 +409,75 @@ namespace NeuroSpectator.PageModels
             catch (Exception ex)
             {
                 StatusMessage = $"Error ending stream: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// Diagnoses OBS connection issues
+        /// </summary>
+        private async Task DiagnoseOBSConnectionAsync()
+        {
+            try
+            {
+                StatusMessage = "Diagnosing OBS connection...";
+
+                string websocketUrl = await Application.Current.MainPage.DisplayPromptAsync(
+                    "OBS Connection Diagnostics",
+                    "Enter WebSocket URL to test",
+                    initialValue: "ws://localhost:4444",
+                    maxLength: 100);
+
+                if (string.IsNullOrEmpty(websocketUrl))
+                {
+                    StatusMessage = "Diagnostics canceled";
+                    return;
+                }
+
+                string password = await Application.Current.MainPage.DisplayPromptAsync(
+                    "OBS Connection Diagnostics",
+                    "Enter password (leave empty if none)",
+                    initialValue: "",
+                    maxLength: 100);
+
+                // Run the compatibility check
+                var result = await NeuroSpectator.Utilities.OBSVersionChecker.CheckOBSCompatibilityAsync(websocketUrl, password);
+
+                if (result.Success)
+                {
+                    await Application.Current.MainPage.DisplayAlert(
+                        "OBS Connection Successful",
+                        $"Successfully connected to OBS\n\n" +
+                        $"OBS Studio Version: {result.OBSVersion}\n" +
+                        $"WebSocket Version: {result.WebSocketVersion}\n\n" +
+                        "Your OBS is properly configured for NeuroSpectator.",
+                        "OK");
+
+                    StatusMessage = "OBS diagnosed successfully";
+                }
+                else
+                {
+                    await Application.Current.MainPage.DisplayAlert(
+                        "OBS Connection Failed",
+                        $"Could not connect to OBS\n\n" +
+                        $"Error: {result.Message}\n\n" +
+                        "Please check:\n" +
+                        "1. OBS is running\n" +
+                        "2. WebSocket Server is enabled in Tools → WebSocket Server Settings\n" +
+                        "3. Port matches in URL (default: ws://localhost:4444 for OBS 27 and earlier, ws://localhost:4455 for OBS 28+)\n" +
+                        "4. Password is correct (if authentication is enabled)",
+                        "OK");
+
+                    StatusMessage = "OBS diagnosis failed";
+                }
+            }
+            catch (Exception ex)
+            {
+                await Application.Current.MainPage.DisplayAlert(
+                    "Error",
+                    $"An error occurred during diagnostics: {ex.Message}",
+                    "OK");
+
+                StatusMessage = "OBS diagnostics error";
             }
         }
 
