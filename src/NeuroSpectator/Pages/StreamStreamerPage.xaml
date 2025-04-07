@@ -184,47 +184,67 @@
                         Margin="10,0,0,0"/>
             </Grid>
 
-            <!-- Preview Area (Placeholder) -->
-            <Frame Grid.Row="1" 
-                   BackgroundColor="#121212" 
-                   BorderColor="#444444" 
-                   Padding="10" 
-                   CornerRadius="5" 
-                   Margin="10">
+            <Frame Grid.Row="1"
+   	BackgroundColor="#121212"
+   	BorderColor="#444444"
+   	Padding="10"
+   	CornerRadius="5"
+   	Margin="10">
                 <Grid RowDefinitions="Auto,*">
-                    <Label Text="OBS Preview" 
-                           HorizontalOptions="Center" 
-                           TextColor="#AAAAAA"
-                           Margin="0,0,0,10"/>
+                    <Label Text="OBS Preview"
+           	HorizontalOptions="Center"
+           	TextColor="#AAAAAA"
+           	Margin="0,0,0,10"/>
 
-                    <Image Grid.Row="1"
-                           Source="obs_preview_placeholder.png"
-                           Aspect="AspectFill"
-                           VerticalOptions="FillAndExpand"/>
+                    <!-- WebView for OBS Virtual Camera preview -->
+                    <Grid Grid.Row="1">
+                        <!-- Preview WebView -->
+                        <WebView Source="{Binding PreviewUrl}"
+                 	IsVisible="{Binding IsPreviewAvailable}"
+                 	VerticalOptions="FillAndExpand"
+                 	HorizontalOptions="FillAndExpand"/>
 
-                    <Label Grid.Row="1"
-                           Text="OBS Studio must be running with the Browser Source configured to use the NeuroSpectator visualizations"
-                           TextColor="#AAAAAA"
-                           HorizontalOptions="Center"
-                           VerticalOptions="Center"
-                           HorizontalTextAlignment="Center"/>
+                        <!-- Loading indicator -->
+                        <ActivityIndicator IsRunning="{Binding IsConnectedToObs}"
+                          	IsVisible="{Binding IsPreviewAvailable, Converter={StaticResource ZeroConverter}}"
+                          	Color="#B388FF"
+                          	VerticalOptions="Center"
+                          	HorizontalOptions="Center"/>
+
+                        <!-- Default message when OBS is not connected -->
+                        <Label Text="OBS Studio must be running with the Browser Source configured to use the NeuroSpectator visualizations"
+               	TextColor="#AAAAAA"
+               	HorizontalOptions="Center"
+               	VerticalOptions="Center"
+               	HorizontalTextAlignment="Center"
+               	IsVisible="{Binding IsConnectedToObs, Converter={StaticResource ZeroConverter}}"/>
+
+                        <!-- Permission denied message -->
+                        <Label Text="Camera permission denied. Please enable camera access to view the OBS Virtual Camera preview."
+               	TextColor="#FF5252"
+               	HorizontalOptions="Center"
+               	VerticalOptions="Center"
+               	HorizontalTextAlignment="Center"
+               	IsVisible="{Binding IsCameraPermissionDenied}"/>
+                    </Grid>
                 </Grid>
             </Frame>
 
+
             <!-- Stream Controls -->
             <Frame Grid.Row="2" Style="{StaticResource CardStyle}">
-                <Grid ColumnDefinitions="*,*,*,*" RowDefinitions="Auto,Auto">
-                    <Label Text="Stream Controls" 
-                           Grid.ColumnSpan="4"
-                           Style="{StaticResource SubHeaderLabelStyle}"
-                           HorizontalOptions="Center"
-                           Margin="0,0,0,10"/>
+                <Grid ColumnDefinitions="*,*,*,*" RowDefinitions="Auto,Auto,Auto">
+                    <Label Text="Stream Controls"
+           	Grid.ColumnSpan="4"
+           	Style="{StaticResource SubHeaderLabelStyle}"
+           	HorizontalOptions="Center"
+           	Margin="0,0,0,10"/>
 
                     <!-- First Row Controls -->
                     <Button Grid.Row="1" Grid.Column="0"
-                            Text="Camera" 
-                            Command="{Binding ToggleCameraCommand}"
-                            IsEnabled="{Binding IsConnectedToObs}">
+            	Text="Camera"
+            	Command="{Binding ToggleCameraCommand}"
+            	IsEnabled="{Binding IsConnectedToObs}">
                         <Button.Style>
                             <Style TargetType="Button">
                                 <Setter Property="BackgroundColor" Value="#444444"/>
@@ -243,9 +263,9 @@
                     </Button>
 
                     <Button Grid.Row="1" Grid.Column="1"
-                        Text="Microphone" 
-                        Command="{Binding ToggleMicCommand}"
-                        IsEnabled="{Binding IsConnectedToObs}">
+        	Text="Microphone"
+        	Command="{Binding ToggleMicCommand}"
+        	IsEnabled="{Binding IsConnectedToObs}">
                         <Button.Style>
                             <Style TargetType="Button">
                                 <Setter Property="BackgroundColor" Value="#444444"/>
@@ -264,9 +284,9 @@
                     </Button>
 
                     <Button Grid.Row="1" Grid.Column="2"
-                        Text="Brain Data" 
-                        Command="{Binding ToggleBrainDataCommand}"
-                        IsEnabled="{Binding IsConnectedToObs}">
+        	Text="Brain Data"
+        	Command="{Binding ToggleBrainDataCommand}"
+        	IsEnabled="{Binding IsConnectedToObs}">
                         <Button.Style>
                             <Style TargetType="Button">
                                 <Setter Property="BackgroundColor" Value="#444444"/>
@@ -284,11 +304,42 @@
                         </Button.Style>
                     </Button>
 
+                    <!-- Replace Configure Brain Data with Virtual Camera -->
                     <Button Grid.Row="1" Grid.Column="3"
-                        Text="Configure Brain Data" 
-                        Style="{StaticResource ControlButtonStyle}"
-                        Command="{Binding ConfigureBrainDataCommand}"
-                        IsEnabled="{Binding IsConnectedToObs}"/>
+        	Text="Virtual Camera"
+        	Command="{Binding ToggleVirtualCameraCommand}"
+        	IsEnabled="{Binding IsConnectedToObs}">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="BackgroundColor" Value="#444444"/>
+                                <Setter Property="TextColor" Value="White"/>
+                                <Setter Property="FontAttributes" Value="Bold"/>
+                                <Setter Property="CornerRadius" Value="5"/>
+                                <Setter Property="Padding" Value="10,5"/>
+                                <Setter Property="Margin" Value="5"/>
+                                <Style.Triggers>
+                                    <DataTrigger TargetType="Button" Binding="{Binding IsVirtualCameraActive}" Value="True">
+                                        <Setter Property="BackgroundColor" Value="#B388FF"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                    <!-- Second row controls -->
+                    <Button Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+            	Text="Configure Brain Data"
+            	Style="{StaticResource ControlButtonStyle}"
+            	Command="{Binding ConfigureBrainDataCommand}"
+            	IsEnabled="{Binding IsConnectedToObs}"
+            	Margin="5,10,5,0"/>
+
+                    <Button Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2"
+            	Text="Take Screenshot"
+            	Style="{StaticResource ControlButtonStyle}"
+            	Command="{Binding TakeScreenshotCommand}"
+            	IsEnabled="{Binding IsConnectedToObs}"
+            	Margin="5,10,5,0"/>
                 </Grid>
             </Frame>
         </Grid>

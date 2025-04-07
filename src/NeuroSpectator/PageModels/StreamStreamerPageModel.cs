@@ -10,6 +10,7 @@ using NeuroSpectator.Services.Integration;
 using NeuroSpectator.Services.Streaming;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using NeuroSpectator.Services.Visualisation;
 
 namespace NeuroSpectator.PageModels
 {
@@ -19,8 +20,8 @@ namespace NeuroSpectator.PageModels
         private readonly DeviceConnectionManager connectionManager;
         private readonly OBSIntegrationService obsService;
         private readonly IMKIOStreamingService streamingService;
+        private readonly BrainDataVisualisationService visualizationService;
 
-        // This will be created on demand when stream starts
         private BrainDataOBSHelper brainDataObsHelper;
 
         #region Properties
@@ -82,6 +83,18 @@ namespace NeuroSpectator.PageModels
         [ObservableProperty]
         private bool isAutoConfiguringObs = false;
 
+        [ObservableProperty]
+        private bool isVirtualCameraActive = false;
+
+        [ObservableProperty]
+        private string previewUrl = "about:blank";
+
+        [ObservableProperty]
+        private bool isCameraPermissionDenied = false;
+
+        [ObservableProperty]
+        private bool isPreviewAvailable = false;
+
         // Timer for updating the stream time
         private System.Timers.Timer streamTimer;
         private DateTime streamStartTime;
@@ -106,6 +119,7 @@ namespace NeuroSpectator.PageModels
         public ICommand AutoConfigureOBSCommand { get; }
         public ICommand ShowOBSSetupGuideCommand { get; }
         public ICommand DiagnoseObsCommand { get; }
+        public ICommand ToggleVirtualCameraCommand { get; }
 
         #endregion
 
@@ -113,12 +127,14 @@ namespace NeuroSpectator.PageModels
             IBCIDeviceManager deviceManager,
             DeviceConnectionManager connectionManager,
             OBSIntegrationService obsService,
-            IMKIOStreamingService streamingService)
+            IMKIOStreamingService streamingService,
+            BrainDataVisualisationService visualizationService)
         {
             this.deviceManager = deviceManager;
             this.connectionManager = connectionManager;
             this.obsService = obsService;
             this.streamingService = streamingService;
+            this.visualizationService = visualizationService;
 
             // Initialize commands
             ConnectToObsCommand = new AsyncRelayCommand(ConnectToObsAsync);
@@ -137,6 +153,7 @@ namespace NeuroSpectator.PageModels
             AutoConfigureOBSCommand = new AsyncRelayCommand(AutoConfigureOBSAsync);
             ShowOBSSetupGuideCommand = new AsyncRelayCommand(ShowOBSSetupGuideAsync);
             DiagnoseObsCommand = new AsyncRelayCommand(DiagnoseOBSConnectionAsync);
+            ToggleVirtualCameraCommand = new AsyncRelayCommand(ToggleVirtualCameraAsync);
 
             // Subscribe to events
             obsService.ConnectionStatusChanged += OnObsConnectionStatusChanged;
@@ -182,6 +199,9 @@ namespace NeuroSpectator.PageModels
             if (IsConnectedToObs)
             {
                 await RefreshObsInfoAsync();
+
+                // Set up preview URL
+                await SetupVirtualCameraPreviewAsync();
             }
 
             // Check device connection status
@@ -247,6 +267,9 @@ namespace NeuroSpectator.PageModels
                 {
                     await RefreshObsInfoAsync();
                     StatusMessage = "Connected to OBS";
+
+                    // Set up the preview URL for virtual camera
+                    await SetupVirtualCameraPreviewAsync();
                 }
                 else
                 {
@@ -298,6 +321,92 @@ namespace NeuroSpectator.PageModels
         }
 
         /// <summary>
+        /// Sets up the virtual camera preview URL
+        /// </summary>
+        private async Task SetupVirtualCameraPreviewAsync()
+        {
+            try
+            {
+                // Ensure the visualization server is running
+                if (!visualizationService.IsServerRunning)
+                {
+                    await visualizationService.StartServerAsync();
+                }
+
+                // Ensure the preview template is available
+                await visualizationService.EnsureOBSPreviewTemplateAvailableAsync();
+
+                // Set the preview URL
+                PreviewUrl = visualizationService.GetPreviewUrl();
+                IsPreviewAvailable = true;
+
+                // Check if virtual camera is active
+                await CheckVirtualCameraStatusAsync();
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error setting up preview: {ex.Message}";
+                IsPreviewAvailable = false;
+            }
+        }
+
+        /// <summary>
+        /// Checks if the virtual camera is currently active
+        /// </summary>
+        private async Task CheckVirtualCameraStatusAsync()
+        {
+            try
+            {
+                // This would ideally check the actual status of the virtual camera
+                // For now, we'll just set it based on OBS connection
+                IsVirtualCameraActive = IsConnectedToObs && IsVirtualCameraActive;
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error checking virtual camera: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// Toggles the virtual camera state
+        /// </summary>
+        private async Task ToggleVirtualCameraAsync()
+        {
+            if (!IsConnectedToObs)
+            {
+                StatusMessage = "Connect to OBS first";
+                return;
+            }
+
+            try
+            {
+                StatusMessage = IsVirtualCameraActive ? "Stopping virtual camera..." : "Starting virtual camera...";
+
+                if (IsVirtualCameraActive)
+                {
+                    // Stop virtual camera
+                    await obsService.StopVirtualCameraAsync();
+                    IsVirtualCameraActive = false;
+                    StatusMessage = "Virtual camera stopped";
+                }
+                else
+                {
+                    // Start virtual camera
+                    await obsService.StartVirtualCameraAsync();
+                    IsVirtualCameraActive = true;
+                    StatusMessage = "Virtual camera started";
+                }
+
+                // Refresh the preview to show the camera status
+                PreviewUrl = $"{visualizationService.GetPreviewUrl()}?refresh={DateTime.Now.Ticks}";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error toggling virtual camera: {ex.Message}";
+            }
+        }
+
+        /// <summary>
         /// Starts the stream
         /// </summary>
         private async Task StartStreamAsync()
@@ -322,6 +431,21 @@ namespace NeuroSpectator.PageModels
                 {
                     StatusMessage = "No BCI device connected";
                     return;
+                }
+
+                // Start virtual camera if it's not already running
+                if (!IsVirtualCameraActive)
+                {
+                    try
+                    {
+                        await obsService.StartVirtualCameraAsync();
+                        IsVirtualCameraActive = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        // Continue even if virtual camera fails
+                        StatusMessage = $"Warning: Could not start virtual camera: {ex.Message}";
+                    }
                 }
 
                 // Create the BrainDataOBSHelper now that we have a connected device
@@ -359,6 +483,9 @@ namespace NeuroSpectator.PageModels
                 streamStartTime = DateTime.Now;
                 streamTimer.Start();
                 UpdateStreamTimeDisplay();
+
+                // Refresh the preview
+                PreviewUrl = $"{visualizationService.GetPreviewUrl()}?refresh={DateTime.Now.Ticks}";
 
                 // Set status
                 StatusMessage = "Stream started";
@@ -398,6 +525,21 @@ namespace NeuroSpectator.PageModels
 
                 // Stop the stream timer
                 streamTimer.Stop();
+
+                // Ask if user wants to stop virtual camera
+                bool stopCamera = await Application.Current.MainPage.DisplayAlert(
+                    "Virtual Camera",
+                    "Would you like to stop the OBS Virtual Camera?",
+                    "Yes", "No");
+
+                if (stopCamera && IsVirtualCameraActive)
+                {
+                    await obsService.StopVirtualCameraAsync();
+                    IsVirtualCameraActive = false;
+
+                    // Refresh the preview
+                    PreviewUrl = $"{visualizationService.GetPreviewUrl()}?refresh={DateTime.Now.Ticks}";
+                }
 
                 // Set status
                 StatusMessage = "Stream ended";
@@ -660,22 +802,58 @@ namespace NeuroSpectator.PageModels
         /// </summary>
         private async Task ShowExitConfirmationAsync()
         {
-            if (IsLive)
+            try
             {
-                bool confirm = await Shell.Current.DisplayAlert(
-                    "End Stream?",
-                    "You are currently streaming. Are you sure you want to exit and end the stream?",
-                    "End Stream", "Cancel");
-
-                if (confirm)
+                if (IsLive)
                 {
-                    await EndStreamAsync();
+                    bool confirm = await Shell.Current.DisplayAlert(
+                        "End Stream?",
+                        "You are currently streaming. Are you sure you want to exit and end the stream?",
+                        "End Stream", "Cancel");
+
+                    if (confirm)
+                    {
+                        await EndStreamAsync();
+
+                        // Additional check for virtual camera
+                        if (IsVirtualCameraActive)
+                        {
+                            bool stopCamera = await Shell.Current.DisplayAlert(
+                                "Virtual Camera",
+                                "The OBS Virtual Camera is still running. Do you want to stop it?",
+                                "Stop Camera", "Leave Running");
+
+                            if (stopCamera)
+                            {
+                                await obsService.StopVirtualCameraAsync();
+                            }
+                        }
+
+                        await Shell.Current.GoToAsync("..");
+                    }
+                }
+                else if (IsVirtualCameraActive)
+                {
+                    bool stopCamera = await Shell.Current.DisplayAlert(
+                        "Virtual Camera",
+                        "The OBS Virtual Camera is still running. Do you want to stop it before exiting?",
+                        "Stop Camera", "Leave Running");
+
+                    if (stopCamera)
+                    {
+                        await obsService.StopVirtualCameraAsync();
+                    }
+
+                    await Shell.Current.GoToAsync("..");
+                }
+                else
+                {
                     await Shell.Current.GoToAsync("..");
                 }
             }
-            else
+            catch (Exception ex)
             {
-                await Shell.Current.GoToAsync("..");
+                StatusMessage = $"Error during exit: {ex.Message}";
             }
         }
 

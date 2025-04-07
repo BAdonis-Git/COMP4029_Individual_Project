@@ -809,6 +809,89 @@ namespace NeuroSpectator.Services.Streaming
             }
         }
 
+        /// <summary>
+        /// Starts the OBS virtual camera
+        /// </summary>
+        public async Task StartVirtualCameraAsync()
+        {
+            if (!IsConnected)
+                throw new InvalidOperationException("Not connected to OBS");
+
+            try
+            {
+                obsWebsocket.StartVirtualCam();
+                await Task.CompletedTask; // For async pattern consistency
+            }
+            catch (Exception ex)
+            {
+                RaiseError(ex);
+                throw;
+            }
+        }
+
+
+        /// <summary>
+        /// Stops the OBS virtual camera
+        /// </summary>
+        public async Task StopVirtualCameraAsync()
+        {
+            if (!IsConnected)
+                throw new InvalidOperationException("Not connected to OBS");
+
+            try
+            {
+                obsWebsocket.StopVirtualCam();
+                await Task.CompletedTask; // For async pattern consistency
+            }
+            catch (Exception ex)
+            {
+                RaiseError(ex);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Checks if the virtual camera is currently active
+        /// </summary>
+        public async Task<bool> IsVirtualCameraActiveAsync()
+        {
+            if (!IsConnected)
+                return false;
+
+            try
+            {
+                var outputStatus = obsWebsocket.GetVirtualCamStatus();
+                return outputStatus.IsActive;
+            }
+            catch (Exception ex)
+            {
+                RaiseError(ex);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Toggles the OBS virtual camera state
+        /// </summary>
+        public async Task<bool> ToggleVirtualCameraAsync()
+        {
+            if (!IsConnected)
+                throw new InvalidOperationException("Not connected to OBS");
+
+            try
+            {
+                var status = obsWebsocket.ToggleVirtualCam();
+                return status.IsActive;
+            }
+            catch (Exception ex)
+            {
+                RaiseError(ex);
+                throw;
+            }
+        }
+
+
+
         #region Event Handlers
 
         /// <summary>

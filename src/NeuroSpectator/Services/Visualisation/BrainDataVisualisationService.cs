@@ -485,6 +485,340 @@ namespace NeuroSpectator.Services.Visualisation
         }
 
         /// <summary>
+        /// Ensures the OBS preview template is available on the server
+        /// </summary>
+        public async Task EnsureOBSPreviewTemplateAvailableAsync()
+        {
+            string obsPreviewHtmlPath = Path.Combine(visualisationDirectory, "obs_preview.html");
+
+            // Check if the template already exists
+            if (!File.Exists(obsPreviewHtmlPath))
+            {
+                // Create the OBS Virtual Camera preview template
+                await File.WriteAllTextAsync(obsPreviewHtmlPath, GetOBSPreviewTemplate());
+            }
+        }
+
+        /// <summary>
+        /// Gets the URL for the OBS Virtual Camera preview
+        /// </summary>
+        public string GetPreviewUrl()
+        {
+            return $"{VisualisationUrl}/obs_preview.html";
+        }
+
+        /// <summary>
+        /// Gets the HTML template for the OBS Virtual Camera preview
+        /// </summary>
+        public string GetOBSPreviewTemplate()
+        {
+            return @"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""utf-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1"">
+    <title>OBS Virtual Camera Preview</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background-color: #1E1E1E;
+            color: white;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            width: 100vw;
+        }
+        
+        .container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background-color: #121212;
+        }
+        
+        .message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #AAAAAA;
+            padding: 20px;
+            border-radius: 5px;
+            background-color: rgba(30, 30, 30, 0.8);
+            z-index: 10;
+            display: none;
+        }
+        
+        .camera-select {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            background-color: rgba(30, 30, 30, 0.8);
+            padding: 5px;
+            border-radius: 5px;
+            max-width: 80%;
+        }
+        
+        select {
+            background-color: #383838;
+            color: white;
+            border: 1px solid #444;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        
+        button {
+            background-color: #B388FF;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-left: 5px;
+        }
+        
+        button:hover {
+            background-color: #A070FF;
+        }
+        
+        .status {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(30, 30, 30, 0.8);
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        
+        .obs-logo {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(30, 30, 30, 0.8);
+            padding: 5px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class=""container"">
+        <video id=""preview"" autoplay playsinline muted></video>
+        
+        <div class=""message"" id=""startMessage"">
+            <h3>OBS Virtual Camera Preview</h3>
+            <p>Click ""Start Preview"" to access the OBS Virtual Camera</p>
+            <button id=""startButton"">Start Preview</button>
+        </div>
+        
+        <div class=""message"" id=""errorMessage"">
+            <h3>Camera Error</h3>
+            <p id=""errorText"">Could not access the camera. Please make sure OBS Virtual Camera is running.</p>
+            <button id=""retryButton"">Retry</button>
+        </div>
+        
+        <div class=""message"" id=""permissionMessage"">
+            <h3>Camera Permission Required</h3>
+            <p>Please allow camera access to view the OBS Virtual Camera preview.</p>
+            <button id=""permissionButton"">Request Permission</button>
+        </div>
+        
+        <div class=""camera-select"" id=""cameraSelect"" style=""display: none;"">
+            <select id=""cameraList""></select>
+            <button id=""switchCamera"">Switch</button>
+        </div>
+        
+        <div class=""status"" id=""status"">Initializing...</div>
+        <div class=""obs-logo"">OBS Virtual Camera</div>
+    </div>
+    
+    <script>
+        // DOM elements
+        const videoElement = document.getElementById('preview');
+        const startMessage = document.getElementById('startMessage');
+        const errorMessage = document.getElementById('errorMessage');
+        const errorText = document.getElementById('errorText');
+        const permissionMessage = document.getElementById('permissionMessage');
+        const startButton = document.getElementById('startButton');
+        const retryButton = document.getElementById('retryButton');
+        const permissionButton = document.getElementById('permissionButton');
+        const cameraSelect = document.getElementById('cameraSelect');
+        const cameraList = document.getElementById('cameraList');
+        const switchCamera = document.getElementById('switchCamera');
+        const statusElement = document.getElementById('status');
+        
+        // Variables to track state
+        let stream = null;
+        let preferredCameraId = '';
+        
+        // Show the start message initially
+        startMessage.style.display = 'block';
+        
+        // Initialize the camera stream
+        async function initializeCamera() {
+            try {
+                // Hide all messages
+                startMessage.style.display = 'none';
+                errorMessage.style.display = 'none';
+                permissionMessage.style.display = 'none';
+                
+                // Set status
+                statusElement.textContent = 'Connecting to camera...';
+                
+                // List available cameras first
+                await listCameras();
+                
+                // Try to access the camera
+                const constraints = {
+                    video: {
+                        deviceId: preferredCameraId ? { exact: preferredCameraId } : undefined,
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+                
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                videoElement.srcObject = stream;
+                
+                // Show camera selection
+                cameraSelect.style.display = 'block';
+                
+                // Update status
+                statusElement.textContent = 'Connected';
+                
+                // Look for OBS Virtual Camera in the list and select it if found
+                const obsCamera = Array.from(cameraList.options).find(option => 
+                    option.text.toLowerCase().includes('obs') || 
+                    option.text.toLowerCase().includes('virtual')
+                );
+                
+                if (obsCamera) {
+                    cameraList.value = obsCamera.value;
+                    switchCameraSource();
+                }
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                
+                // Handle permission errors
+                if (err.name === 'NotAllowedError') {
+                    permissionMessage.style.display = 'block';
+                    statusElement.textContent = 'Permission denied';
+                } else {
+                    errorText.textContent = `Error: ${err.message}`;
+                    errorMessage.style.display = 'block';
+                    statusElement.textContent = 'Error';
+                }
+            }
+        }
+        
+        // List available cameras and populate select
+        async function listCameras() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                
+                // Clear the list
+                cameraList.innerHTML = '';
+                
+                // Add cameras to the list
+                videoDevices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || `Camera ${cameraList.options.length + 1}`;
+                    
+                    // Preselect OBS Virtual Camera if found
+                    if (option.text.toLowerCase().includes('obs') || 
+                        option.text.toLowerCase().includes('virtual')) {
+                        option.selected = true;
+                        preferredCameraId = device.deviceId;
+                    }
+                    
+                    cameraList.appendChild(option);
+                });
+                
+                // Show camera select if multiple cameras
+                cameraSelect.style.display = videoDevices.length > 1 ? 'block' : 'none';
+            } catch (err) {
+                console.error('Error listing cameras:', err);
+            }
+        }
+        
+        // Switch to the selected camera
+        async function switchCameraSource() {
+            try {
+                statusElement.textContent = 'Switching camera...';
+                
+                // Stop the current stream if active
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                
+                // Get the selected camera ID
+                preferredCameraId = cameraList.value;
+                
+                // Start new stream with selected camera
+                const constraints = {
+                    video: {
+                        deviceId: { exact: preferredCameraId },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+                
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                videoElement.srcObject = stream;
+                
+                statusElement.textContent = 'Connected';
+            } catch (err) {
+                console.error('Error switching camera:', err);
+                errorText.textContent = `Error switching camera: ${err.message}`;
+                errorMessage.style.display = 'block';
+                statusElement.textContent = 'Error';
+            }
+        }
+        
+        // Button event listeners
+        startButton.addEventListener('click', initializeCamera);
+        retryButton.addEventListener('click', initializeCamera);
+        permissionButton.addEventListener('click', initializeCamera);
+        switchCamera.addEventListener('click', switchCameraSource);
+        
+        // Check if browser supports getUserMedia
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            errorText.textContent = 'Your browser does not support camera access.';
+            errorMessage.style.display = 'block';
+            startMessage.style.display = 'none';
+            statusElement.textContent = 'Not supported';
+        }
+        
+        // If automatic start is preferred, remove this comment:
+        // window.addEventListener('load', initializeCamera);
+    </script>
+</body>
+</html>";
+        }
+
+        /// <summary>
         /// Disposes of resources
         /// </summary>
         public void Dispose()
@@ -514,8 +848,6 @@ namespace NeuroSpectator.Services.Visualisation
                 isDisposed = true;
             }
         }
-
-        // Add these methods to BrainDataVisualisationService.cs
 
         /// <summary>
         /// Ensures the OBS overlay template is available on the server
