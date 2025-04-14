@@ -117,9 +117,23 @@
             <!-- OBS Connection Status and Setup -->
             <Grid Grid.Column="0" Margin="10,0">
                 <VerticalStackLayout>
-                    <Label Text="OBS Status:" TextColor="#AAAAAA" FontSize="14"/>
-                    <Label IsVisible="{Binding IsConnectedToObs}" Text="CONNECTED" Style="{StaticResource ConnectedTagStyle}" Margin="0,5,0,0"/>
-                    <Label IsVisible="{Binding IsConnectedToObs, Converter={StaticResource ZeroConverter}}" Text="DISCONNECTED" Style="{StaticResource DisconnectedTagStyle}" Margin="0,5,0,0"/>
+                    <Label Text="Stream Status:" TextColor="#AAAAAA" FontSize="14" HorizontalOptions="End"/>
+                    <Label IsVisible="{Binding IsLive}" Text="LIVE" Style="{StaticResource LiveTagStyle}" HorizontalOptions="End" Margin="0,5,0,0"/>
+                    <Label IsVisible="{Binding IsLive, Converter={StaticResource ZeroConverter}}" Text="OFFLINE" TextColor="#AAAAAA" FontSize="14" HorizontalOptions="End" Margin="0,5,0,0"/>
+                    <!-- Start Stream Button - should be visible when not streaming -->
+                    <Button IsVisible="{Binding IsLive, Converter={StaticResource ZeroConverter}}" 
+                        Command="{Binding StartStreamCommand}" 
+                        Text="Start Stream" 
+                        Style="{StaticResource PrimaryButtonStyle}" 
+                        HorizontalOptions="End" 
+                        Margin="0,5,0,0"/>
+                    <!-- End Stream Button - should be visible when streaming -->
+                    <Button IsVisible="{Binding IsLive}" 
+                        Command="{Binding EndStreamCommand}" 
+                        Text="End Stream" 
+                        Style="{StaticResource DangerButtonStyle}" 
+                        HorizontalOptions="End" 
+                        Margin="0,5,0,0"/>
                     <Button Command="{Binding ConnectToObsCommand}" Text="Connect to OBS" Style="{StaticResource PrimaryButtonStyle}" IsVisible="{Binding IsConnectedToObs, Converter={StaticResource ZeroConverter}}" Margin="0,5,0,0"/>
                     <Button Command="{Binding DiagnoseObsCommand}" Text="Diagnose OBS" Style="{StaticResource ControlButtonStyle}" IsVisible="{Binding IsConnectedToObs, Converter={StaticResource ZeroConverter}}" Margin="0,5,0,0"/>
                     <Button Command="{Binding RefreshObsInfoCommand}" Text="Refresh OBS Info" Style="{StaticResource ControlButtonStyle}" IsVisible="{Binding IsConnectedToObs}" Margin="0,5,0,0"/>

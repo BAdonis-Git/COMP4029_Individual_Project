@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.Maui.Dispatching;
 using NeuroSpectator.Models.BCI.Common;
+using NeuroSpectator.Services.BCI;
 using NeuroSpectator.Services.BCI.Interfaces;
 
 namespace NeuroSpectator.Services.BCI

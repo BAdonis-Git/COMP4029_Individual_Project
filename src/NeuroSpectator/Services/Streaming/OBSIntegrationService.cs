@@ -819,16 +819,29 @@ namespace NeuroSpectator.Services.Streaming
 
             try
             {
-                obsWebsocket.StartVirtualCam();
-                await Task.CompletedTask; // For async pattern consistency
+                // Add debug output
+                Console.WriteLine("Attempting to start OBS virtual camera");
+
+                // Call obsWebsocket.StartVirtualCam() with explicit error handling
+                try
+                {
+                    obsWebsocket.StartVirtualCam();
+                    await Task.CompletedTask; // For async pattern consistency
+                    Console.WriteLine("OBS virtual camera started successfully");
+                }
+                catch (ErrorResponseException ex)
+                {
+                    Console.WriteLine($"OBS error starting virtual camera: {ex.Message}");
+                    throw new Exception($"OBS error: {ex.Message}", ex);
+                }
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Error starting virtual camera: {ex.Message}");
                 RaiseError(ex);
                 throw;
             }
         }
-
 
         /// <summary>
         /// Stops the OBS virtual camera
@@ -840,11 +853,25 @@ namespace NeuroSpectator.Services.Streaming
 
             try
             {
-                obsWebsocket.StopVirtualCam();
-                await Task.CompletedTask; // For async pattern consistency
+                // Add debug output
+                Console.WriteLine("Attempting to stop OBS virtual camera");
+
+                // Call obsWebsocket.StopVirtualCam() with explicit error handling
+                try
+                {
+                    obsWebsocket.StopVirtualCam();
+                    await Task.CompletedTask; // For async pattern consistency
+                    Console.WriteLine("OBS virtual camera stopped successfully");
+                }
+                catch (ErrorResponseException ex)
+                {
+                    Console.WriteLine($"OBS error stopping virtual camera: {ex.Message}");
+                    throw new Exception($"OBS error: {ex.Message}", ex);
+                }
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Error stopping virtual camera: {ex.Message}");
                 RaiseError(ex);
                 throw;
             }
@@ -860,11 +887,14 @@ namespace NeuroSpectator.Services.Streaming
 
             try
             {
+                Console.WriteLine("Checking if OBS virtual camera is active");
                 var outputStatus = obsWebsocket.GetVirtualCamStatus();
+                Console.WriteLine($"Virtual camera status: {outputStatus.IsActive}");
                 return outputStatus.IsActive;
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Error checking virtual camera status: {ex.Message}");
                 RaiseError(ex);
                 return false;
             }

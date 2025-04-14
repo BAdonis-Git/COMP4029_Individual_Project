@@ -12,7 +12,7 @@ using NeuroSpectator.Services.BCI.Interfaces;
 using NeuroSpectator.Services.BCI;
 using Microsoft.Extensions.DependencyInjection;
 using CommunityToolkit.Maui;
-using NeuroSpectator.Services.BCI;
+using Microsoft.Maui.Networking;
 
 namespace NeuroSpectator;
 
@@ -41,20 +41,28 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
 
+        // Register MAUI services
+        builder.Services.AddSingleton<IConnectivity>(provider => Connectivity.Current);
+
         // Register device connection manager
         builder.Services.AddSingleton<DeviceConnectionManager>();
 
-        // Register services
+        // Register core services
         builder.Services.AddBCIServices();
         builder.Services.AddApplicationServices();
 
-        // Register OBS and visualization services
+        // Register streaming and visualization services explicitly 
+        // (in addition to what's registered in AddStreamingServices)
         builder.Services.AddSingleton<OBSIntegrationService>();
         builder.Services.AddSingleton<BrainDataVisualisationService>();
         builder.Services.AddSingleton<BrainDataJsonService>();
+        builder.Services.AddSingleton<IMKIOStreamingService, MKIOStreamingService>();
+
+        // Register the OBSSetupGuide - simplified registration
+        builder.Services.AddTransient<OBSSetupGuide>();
 
         // Register the BrainDataOBSHelper with explicit dependencies
-        builder.Services.AddSingleton<BrainDataOBSHelper>(serviceProvider =>
+        builder.Services.AddTransient<BrainDataOBSHelper>(serviceProvider =>
         {
             var deviceManager = serviceProvider.GetRequiredService<IBCIDeviceManager>();
             var obsService = serviceProvider.GetRequiredService<OBSIntegrationService>();
@@ -66,6 +74,8 @@ public static class MauiProgram
 
             if (device == null)
             {
+                // Return a placeholder or throw an exception
+                // For now, we'll throw an exception to make errors more visible
                 throw new InvalidOperationException("No BCI device available for BrainDataOBSHelper");
             }
 
@@ -77,18 +87,11 @@ public static class MauiProgram
             );
         });
 
-        // Register the OBSSetupGuide
-        builder.Services.AddTransient<OBSSetupGuide>(serviceProvider =>
-            new OBSSetupGuide(
-                serviceProvider.GetRequiredService<OBSIntegrationService>(),
-                serviceProvider.GetRequiredService<BrainDataVisualisationService>()
-            ));
-
         // Register authentication and storage services
         builder.Services.AddSingleton<AuthenticationService>();
         builder.Services.AddSingleton<UserStorageService>(serviceProvider =>
             new UserStorageService(
-                "DefaultEndpointsProtocol=https;AccountName=neurospectatorstorage;AccountKey=ZaiVwMLyTtZ/KP6EnhzbWWYvDHCMgEdg6ASouE1edz5c8tHTaApus7dUNtEaskEnXbOgvJCCH7g++AStWjVNTg==;EndpointSuffix=core.windows.net")); // Replace with your connection string
+                "DefaultEndpointsProtocol=https;AccountName=neurospectatorstorage;AccountKey=ZaiVwMLyTtZ/KP6EnhzbWWYvDHCMgEdg6ASouE1edz5c8tHTaApus7dUNtEaskEnXbOgvJCCH7g++AStWjVNTg==;EndpointSuffix=core.windows.net"));
 
         builder.Services.AddSingleton<AccountService>();
 

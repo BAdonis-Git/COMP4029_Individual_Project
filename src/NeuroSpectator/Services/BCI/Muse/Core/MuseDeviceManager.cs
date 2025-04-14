@@ -173,7 +173,19 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
                         CurrentDevice = device;
 
                         // Register the device with the connection manager if available
-                        connectionManager?.RegisterDevice(device);
+                        // This is crucial to maintain consistent state across app
+                        if (connectionManager != null)
+                        {
+                            Console.WriteLine($"Registering device with connection manager: {museInfo.Name}");
+                            connectionManager.RegisterDevice(device);
+
+                            // Explicitly notify the connection manager about the connection
+                            connectionManager.NotifyConnected(device);
+                        }
+                        else
+                        {
+                            Console.WriteLine("No connection manager available for device registration");
+                        }
 
                         // Return the device
                         return device;

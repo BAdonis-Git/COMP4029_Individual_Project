@@ -6,9 +6,9 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NeuroSpectator.Models.BCI.Common;
-using NeuroSpectator.Pages;
-using NeuroSpectator.Services;
+using NeuroSpectator.Services.BCI;
 using NeuroSpectator.Services.BCI.Interfaces;
+using NeuroSpectator.Pages;
 
 namespace NeuroSpectator.PageModels
 {
@@ -18,12 +18,15 @@ namespace NeuroSpectator.PageModels
     public partial class YourNexusPageModel : ObservableObject, IDisposable
     {
         private readonly IBCIDeviceManager deviceManager;
+        private readonly DeviceConnectionManager connectionManager; // Added connection manager
         private bool _disposed = false;
 
         [ObservableProperty]
         private bool isInitialized;
 
         [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(IsNotConnected))]
+        [NotifyPropertyChangedFor(nameof(HasConnectedDevice))]
         private bool isConnected;
 
         [ObservableProperty]
@@ -47,6 +50,10 @@ namespace NeuroSpectator.PageModels
         [ObservableProperty]
         private string averageFocus = "82%";
 
+        // Added property to check connection status
+        public bool IsNotConnected => !IsConnected;
+        public bool HasConnectedDevice => IsConnected;
+
         // Commands
         public ICommand StartStreamCommand { get; }
         public ICommand ViewStreamCommand { get; }
@@ -56,9 +63,10 @@ namespace NeuroSpectator.PageModels
         /// <summary>
         /// Creates a new instance of the YourNexusPageModel class
         /// </summary>
-        public YourNexusPageModel(IBCIDeviceManager deviceManager)
+        public YourNexusPageModel(IBCIDeviceManager deviceManager, DeviceConnectionManager connectionManager = null)
         {
             this.deviceManager = deviceManager ?? throw new ArgumentNullException(nameof(deviceManager));
+            this.connectionManager = connectionManager; // Store connection manager
 
             // Initialize commands
             StartStreamCommand = new AsyncRelayCommand(StartStreamAsync);
@@ -66,17 +74,84 @@ namespace NeuroSpectator.PageModels
             ViewAnalyticsCommand = new AsyncRelayCommand<UserStreamModel>(ViewAnalyticsAsync);
             SelectTimeRangeCommand = new AsyncRelayCommand<string>(SelectTimeRangeAsync);
 
-            // Check if a device is already connected
-            IsConnected = deviceManager.CurrentDevice != null && deviceManager.CurrentDevice.IsConnected;
+            // Check connection status from BOTH managers
+            IsConnected = CheckDeviceConnected();
 
             // Subscribe to device manager events
+            deviceManager.DeviceListChanged += OnDeviceListChanged;
+
             if (deviceManager.CurrentDevice != null)
             {
                 deviceManager.CurrentDevice.ConnectionStateChanged += OnDeviceConnectionStateChanged;
             }
 
+            // Subscribe to connection manager events if available
+            if (connectionManager != null)
+            {
+                connectionManager.ConnectionStatusChanged += OnConnectionStatusChanged;
+                connectionManager.DeviceConnected += OnDeviceConnected;
+                connectionManager.DeviceDisconnected += OnDeviceDisconnected;
+            }
+
             // Load placeholder data for demonstration
             LoadPlaceholderData();
+        }
+
+        /// <summary>
+        /// Check if a device is connected by checking both managers
+        /// </summary>
+        private bool CheckDeviceConnected()
+        {
+            bool deviceManagerConnected = deviceManager.CurrentDevice != null && deviceManager.CurrentDevice.IsConnected;
+
+            // Also check connection manager if available
+            if (connectionManager != null)
+            {
+                return deviceManagerConnected || connectionManager.IsDeviceConnected;
+            }
+
+            return deviceManagerConnected;
+        }
+
+        /// <summary>
+        /// Refreshes the device connection status from both managers
+        /// </summary>
+        private async Task RefreshDeviceConnectionStatusAsync()
+        {
+            try
+            {
+                Debug.WriteLine("YourNexusPage: Refreshing device connection status");
+                bool wasConnected = IsConnected;
+
+                // Check device manager
+                bool deviceManagerConnected = deviceManager.CurrentDevice != null &&
+                                             deviceManager.CurrentDevice.IsConnected;
+
+                // Check connection manager if available
+                bool connectionManagerConnected = false;
+                if (connectionManager != null)
+                {
+                    var statusInfo = await connectionManager.RefreshConnectionStatusAsync();
+                    connectionManagerConnected = statusInfo.IsConnected;
+                }
+
+                // Update connection status
+                IsConnected = deviceManagerConnected || connectionManagerConnected;
+
+                Debug.WriteLine($"YourNexusPage: Device connection status: {IsConnected} (was {wasConnected})");
+
+                // If connection status changed, update properties
+                if (wasConnected != IsConnected)
+                {
+                    OnPropertyChanged(nameof(IsConnected));
+                    OnPropertyChanged(nameof(IsNotConnected));
+                    OnPropertyChanged(nameof(HasConnectedDevice));
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"YourNexusPage: Error refreshing device status: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -128,10 +203,15 @@ namespace NeuroSpectator.PageModels
             {
                 if (!IsInitialized)
                 {
-                    // Check if a device is connected
-                    IsConnected = deviceManager.CurrentDevice != null && deviceManager.CurrentDevice.IsConnected;
+                    // Check device connection status
+                    await RefreshDeviceConnectionStatusAsync();
 
                     IsInitialized = true;
+                }
+                else
+                {
+                    // Always refresh the connection status when the page appears
+                    await RefreshDeviceConnectionStatusAsync();
                 }
             }
             catch (Exception ex)
@@ -141,19 +221,21 @@ namespace NeuroSpectator.PageModels
         }
 
         /// <summary>
-        /// Starts a new stream
+        /// Starts a new stream by opening a new window with StreamStreamerPage
         /// </summary>
         private async Task StartStreamAsync()
         {
             try
             {
+                // Refresh connection status first before proceeding
+                await RefreshDeviceConnectionStatusAsync();
+
                 // Check if a device is connected
                 if (!IsConnected)
                 {
                     var result = await Shell.Current.DisplayAlert("No Device Connected",
                         "You need to connect a BCI device before starting a stream. Would you like to connect a device now?",
                         "Yes", "No");
-
                     if (result)
                     {
                         // Navigate to devices page if user chooses to connect a device
@@ -161,6 +243,17 @@ namespace NeuroSpectator.PageModels
                     }
                     return;
                 }
+
+                // Make sure the connection manager knows about the device
+                if (connectionManager != null && deviceManager.CurrentDevice != null &&
+                    deviceManager.CurrentDevice.IsConnected)
+                {
+                    Debug.WriteLine("YourNexusPage: Ensuring device is registered with connection manager");
+                    // Ensure the device is registered with the connection manager
+                    connectionManager.RegisterDevice(deviceManager.CurrentDevice);
+                }
+
+                Debug.WriteLine("YourNexusPage: Opening StreamStreamerPage in new window");
 
                 // Create a new window for the streaming page
                 var streamWindow = new Window
@@ -229,9 +322,72 @@ namespace NeuroSpectator.PageModels
         /// <summary>
         /// Handles the ConnectionStateChanged event
         /// </summary>
-        private void OnDeviceConnectionStateChanged(object sender, ConnectionStateChangedEventArgs e)
+        private async void OnDeviceConnectionStateChanged(object sender, ConnectionStateChangedEventArgs e)
         {
-            IsConnected = e.NewState == ConnectionState.Connected;
+            await MainThread.InvokeOnMainThreadAsync(async () => {
+                IsConnected = e.NewState == ConnectionState.Connected;
+                Debug.WriteLine($"YourNexusPage: Device connection state changed to {e.NewState}");
+
+                // Update dependent properties
+                OnPropertyChanged(nameof(IsNotConnected));
+                OnPropertyChanged(nameof(HasConnectedDevice));
+
+                // If newly connected and we have a connection manager, register the device
+                if (IsConnected && connectionManager != null && sender is IBCIDevice device)
+                {
+                    connectionManager.RegisterDevice(device);
+                    Debug.WriteLine($"YourNexusPage: Registered device with connection manager: {device.Name}");
+                }
+            });
+        }
+
+        /// <summary>
+        /// Handles the DeviceListChanged event
+        /// </summary>
+        private void OnDeviceListChanged(object sender, System.Collections.Generic.List<IBCIDeviceInfo> devices)
+        {
+            Debug.WriteLine($"YourNexusPage: Device list changed - {devices.Count} devices available");
+        }
+
+        /// <summary>
+        /// Handles the ConnectionStatusChanged event from the connection manager
+        /// </summary>
+        private async void OnConnectionStatusChanged(object sender, ConnectionStatusChangedEventArgs e)
+        {
+            Debug.WriteLine($"YourNexusPage: Connection status changed {e.OldStatus} -> {e.NewStatus}");
+
+            // Refresh connection status on UI thread
+            await MainThread.InvokeOnMainThreadAsync(async () => {
+                await RefreshDeviceConnectionStatusAsync();
+            });
+        }
+
+        /// <summary>
+        /// Handles the DeviceConnected event from the connection manager
+        /// </summary>
+        private async void OnDeviceConnected(object sender, IBCIDevice device)
+        {
+            Debug.WriteLine($"YourNexusPage: Device connected event: {device.Name}");
+
+            // Update connection status on UI thread
+            await MainThread.InvokeOnMainThreadAsync(() => {
+                IsConnected = true;
+                OnPropertyChanged(nameof(IsNotConnected));
+                OnPropertyChanged(nameof(HasConnectedDevice));
+            });
+        }
+
+        /// <summary>
+        /// Handles the DeviceDisconnected event from the connection manager
+        /// </summary>
+        private async void OnDeviceDisconnected(object sender, IBCIDevice device)
+        {
+            Debug.WriteLine($"YourNexusPage: Device disconnected event: {device.Name}");
+
+            // Refresh connection status on UI thread
+            await MainThread.InvokeOnMainThreadAsync(async () => {
+                await RefreshDeviceConnectionStatusAsync();
+            });
         }
 
         public void Dispose()
@@ -247,9 +403,21 @@ namespace NeuroSpectator.PageModels
                 if (disposing)
                 {
                     // Unsubscribe from events
+                    if (deviceManager != null)
+                    {
+                        deviceManager.DeviceListChanged -= OnDeviceListChanged;
+                    }
+
                     if (deviceManager?.CurrentDevice != null)
                     {
                         deviceManager.CurrentDevice.ConnectionStateChanged -= OnDeviceConnectionStateChanged;
+                    }
+
+                    if (connectionManager != null)
+                    {
+                        connectionManager.ConnectionStatusChanged -= OnConnectionStatusChanged;
+                        connectionManager.DeviceConnected -= OnDeviceConnected;
+                        connectionManager.DeviceDisconnected -= OnDeviceDisconnected;
                     }
                 }
 

@@ -346,38 +346,58 @@ namespace NeuroSpectator.PageModels
                 bool wasConnected = IsDeviceConnected;
                 bool deviceFound = false;
 
-                // Check device manager first
-                if (deviceManager.CurrentDevice != null)
-                {
-                    bool isConnected = deviceManager.CurrentDevice.IsConnected;
-                    deviceFound = isConnected;
-
-                    if (isConnected)
-                    {
-                        IsDeviceConnected = true;
-                        ConnectedDeviceName = deviceManager.CurrentDevice.Name ?? "Unknown Device";
-                        DeviceStatusMessage = $"Connected to {ConnectedDeviceName}";
-
-                        // Update device info
-                        await UpdateDeviceInfoAsync(deviceManager.CurrentDevice);
-
-                        Debug.WriteLine($"StreamerPage: Connected device found: {ConnectedDeviceName}");
-                    }
-                }
-
-                // If no device found in device manager, check connection manager
-                if (!deviceFound && connectionManager != null)
+                // IMPORTANT: First check connection manager as the source of truth
+                if (connectionManager != null)
                 {
                     var statusInfo = await connectionManager.RefreshConnectionStatusAsync();
-
                     if (statusInfo.IsConnected)
                     {
                         IsDeviceConnected = true;
                         ConnectedDeviceName = statusInfo.DeviceName ?? "Unknown Device";
                         DeviceStatusMessage = $"Connected to {ConnectedDeviceName}";
-
                         deviceFound = true;
                         Debug.WriteLine($"StreamerPage: Connected device found via connection manager: {ConnectedDeviceName}");
+
+                        // If connection manager knows about the device but deviceManager doesn't,
+                        // there could be a sync issue - find the device in deviceManager
+                        if (deviceManager.CurrentDevice == null || !deviceManager.CurrentDevice.IsConnected)
+                        {
+                            // Try to find a device with matching name/id in available devices
+                            foreach (var deviceInfo in deviceManager.AvailableDevices)
+                            {
+                                if (deviceInfo.Name == ConnectedDeviceName)
+                                {
+                                    Debug.WriteLine($"StreamerPage: Found matching device in deviceManager's available devices");
+                                    // Don't connect here, as that could cause recursive issues
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // If not found in connection manager, check device manager
+                if (!deviceFound && deviceManager.CurrentDevice != null)
+                {
+                    bool isConnected = deviceManager.CurrentDevice.IsConnected;
+                    if (isConnected)
+                    {
+                        IsDeviceConnected = true;
+                        ConnectedDeviceName = deviceManager.CurrentDevice.Name ?? "Unknown Device";
+                        DeviceStatusMessage = $"Connected to {ConnectedDeviceName}";
+                        deviceFound = true;
+
+                        // Update device info
+                        await UpdateDeviceInfoAsync(deviceManager.CurrentDevice);
+
+                        Debug.WriteLine($"StreamerPage: Connected device found in deviceManager: {ConnectedDeviceName}");
+
+                        // IMPORTANT: Register with connection manager if not already done
+                        if (connectionManager != null)
+                        {
+                            Debug.WriteLine($"StreamerPage: Ensuring device is registered with connection manager");
+                            connectionManager.RegisterDevice(deviceManager.CurrentDevice);
+                        }
                     }
                 }
 
@@ -653,9 +673,6 @@ namespace NeuroSpectator.PageModels
 
         #region Page Lifecycle
 
-        /// <summary>
-        /// Called when the page appears
-        /// </summary>
         public async Task OnAppearingAsync()
         {
             try
@@ -671,6 +688,9 @@ namespace NeuroSpectator.PageModels
 
                     // Set up preview URL
                     await SetupVirtualCameraPreviewAsync();
+
+                    // Check virtual camera status
+                    await CheckVirtualCameraStatusAsync();
 
                     StatusMessage = "Connected to OBS";
                 }
@@ -899,13 +919,27 @@ namespace NeuroSpectator.PageModels
         {
             try
             {
-                // This would ideally check the actual status of the virtual camera
-                // For now, we'll just set it based on OBS connection
-                IsVirtualCameraActive = IsConnectedToObs && IsVirtualCameraActive;
+                if (!IsConnectedToObs)
+                {
+                    IsVirtualCameraActive = false;
+                    return;
+                }
+
+                // Get the current status directly from OBS
+                bool isActive = await obsService.IsVirtualCameraActiveAsync();
+
+                // Only update if different to avoid unnecessary UI updates
+                if (IsVirtualCameraActive != isActive)
+                {
+                    Debug.WriteLine($"Updating virtual camera status: {isActive}");
+                    IsVirtualCameraActive = isActive;
+                    OnPropertyChanged(nameof(IsVirtualCameraActive));
+                }
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error checking virtual camera: {ex.Message}";
+                Debug.WriteLine($"Error checking virtual camera status: {ex.Message}");
+                // Don't update the status message to avoid confusion
             }
         }
 
@@ -924,9 +958,20 @@ namespace NeuroSpectator.PageModels
             {
                 StatusMessage = IsVirtualCameraActive ? "Stopping virtual camera..." : "Starting virtual camera...";
 
+                // Check if OBS is connected
+                if (!obsService.IsConnected)
+                {
+                    StatusMessage = "OBS is not connected";
+                    await RefreshObsInfoAsync();
+                    return;
+                }
+
+                Debug.WriteLine($"Virtual Camera: Current state is {IsVirtualCameraActive}");
+
                 if (IsVirtualCameraActive)
                 {
                     // Stop virtual camera
+                    Debug.WriteLine("Virtual Camera: Attempting to stop");
                     await obsService.StopVirtualCameraAsync();
                     IsVirtualCameraActive = false;
                     StatusMessage = "Virtual camera stopped";
@@ -934,6 +979,7 @@ namespace NeuroSpectator.PageModels
                 else
                 {
                     // Start virtual camera
+                    Debug.WriteLine("Virtual Camera: Attempting to start");
                     await obsService.StartVirtualCameraAsync();
                     IsVirtualCameraActive = true;
                     StatusMessage = "Virtual camera started";
@@ -941,9 +987,14 @@ namespace NeuroSpectator.PageModels
 
                 // Refresh the preview to show the camera status
                 PreviewUrl = $"{visualizationService.GetPreviewUrl()}?refresh={DateTime.Now.Ticks}";
+
+                // Force UI to update the button state
+                OnPropertyChanged(nameof(IsVirtualCameraActive));
             }
             catch (Exception ex)
             {
+                Debug.WriteLine($"Error toggling virtual camera: {ex.Message}");
+                Debug.WriteLine($"Stack trace: {ex.StackTrace}");
                 StatusMessage = $"Error toggling virtual camera: {ex.Message}";
             }
         }
@@ -1415,10 +1466,16 @@ namespace NeuroSpectator.PageModels
                 IsAutoConfiguringObs = true;
                 StatusMessage = "Auto-configuring OBS...";
 
-                // Create an OBS setup guide
-                var setupGuide = MauiProgram.Services.GetService<OBSSetupGuide>();
+                // Create an OBS setup guide manually if DI fails
+                OBSSetupGuide setupGuide = MauiProgram.Services.GetService<OBSSetupGuide>();
 
-                // Run the auto-configuration
+                if (setupGuide == null)
+                {
+                    Debug.WriteLine("Creating OBSSetupGuide manually since DI failed");
+                    setupGuide = new OBSSetupGuide(obsService, visualizationService);
+                }
+
+                Debug.WriteLine("Starting auto-configuration process");
                 bool success = await setupGuide.AutoConfigureOBSForNeuroSpectatorAsync();
 
                 if (success)
@@ -1428,14 +1485,20 @@ namespace NeuroSpectator.PageModels
 
                     // Refresh OBS info
                     await RefreshObsInfoAsync();
+
+                    // Update UI
+                    OnPropertyChanged(nameof(IsSetupComplete));
                 }
                 else
                 {
                     StatusMessage = "OBS auto-configuration failed";
+                    Debug.WriteLine("Auto-configuration returned false");
                 }
             }
             catch (Exception ex)
             {
+                Debug.WriteLine($"Error configuring OBS: {ex.Message}");
+                Debug.WriteLine($"Stack trace: {ex.StackTrace}");
                 StatusMessage = $"Error configuring OBS: {ex.Message}";
             }
             finally

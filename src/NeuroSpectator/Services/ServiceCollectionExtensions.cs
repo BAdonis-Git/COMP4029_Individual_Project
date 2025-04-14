@@ -9,6 +9,7 @@ using NeuroSpectator.Services.BCI.Muse.Platform;
 using NeuroSpectator.Services;
 using NeuroSpectator.Services.Streaming;
 using NeuroSpectator.Services.Visualisation;
+using NeuroSpectator.Services.Integration;
 
 namespace NeuroSpectator.Services
 {
@@ -35,8 +36,11 @@ namespace NeuroSpectator.Services
             // Register Muse-specific services explicitly for use cases that need them directly
             services.AddSingleton<MuseDeviceManager>();
 
-            // Register the Device Connection Manager
-            services.AddSingleton<DeviceConnectionManager>();
+            // Register the Device Connection Manager if not already registered
+            if (!services.Any(s => s.ServiceType == typeof(DeviceConnectionManager)))
+            {
+                services.AddSingleton<DeviceConnectionManager>();
+            }
 
             return services;
         }
@@ -46,8 +50,11 @@ namespace NeuroSpectator.Services
         /// </summary>
         public static IServiceCollection AddStreamingServices(this IServiceCollection services)
         {
-            // Register MAUI services needed for streaming
-            services.AddSingleton<IConnectivity>(provider => Connectivity.Current);
+            // Register MAUI services needed for streaming if not already registered
+            if (!services.Any(s => s.ServiceType == typeof(IConnectivity)))
+            {
+                services.AddSingleton<IConnectivity>(provider => Connectivity.Current);
+            }
 
             // Register OBS integration service
             services.AddSingleton<OBSIntegrationService>();
@@ -55,8 +62,12 @@ namespace NeuroSpectator.Services
             // Register streaming service for MK.IO
             services.AddSingleton<IMKIOStreamingService, MKIOStreamingService>();
 
-            // Register brain data visualization service
+            // Register brain data services
             services.AddSingleton<BrainDataVisualisationService>();
+            services.AddSingleton<BrainDataJsonService>();
+
+            // Register OBS integration helpers
+            services.AddTransient<OBSSetupGuide>();
 
             return services;
         }
@@ -72,7 +83,13 @@ namespace NeuroSpectator.Services
             // Register streaming services
             services.AddStreamingServices();
 
-            // Add other application services here
+            // Register integration services
+            if (!services.Any(s => s.ServiceType == typeof(BrainDataOBSHelper)))
+            {
+                // The BrainDataOBSHelper requires more specific registration which is handled in MauiProgram.cs
+                // because it depends on the IBCIDevice which may need custom resolution
+                // services.AddTransient<BrainDataOBSHelper>();
+            }
 
             return services;
         }
