@@ -168,6 +168,33 @@
             </VerticalStackLayout>
         </Grid>
 
+        <!-- Device Connection Status Section -->
+        <Frame Grid.Row="0" Grid.Column="1" Style="{StaticResource CardStyle}" Margin="5,0,5,5">
+            <Grid RowDefinitions="Auto,Auto,Auto">
+                <Label Text="Device Status:" TextColor="#AAAAAA" FontSize="14"/>
+
+                <StackLayout Grid.Row="1" Orientation="Horizontal" Margin="0,5,0,0">
+                    <Label IsVisible="{Binding IsDeviceConnected}" Text="CONNECTED" Style="{StaticResource ConnectedTagStyle}"/>
+                    <Label IsVisible="{Binding NoDeviceConnected}" Text="DISCONNECTED" Style="{StaticResource DisconnectedTagStyle}"/>
+                    <Label Text="{Binding ConnectedDeviceName}" TextColor="White" FontAttributes="Bold" Margin="5,0,0,0"/>
+                </StackLayout>
+
+                <StackLayout Grid.Row="2" IsVisible="{Binding IsDeviceConnected}" Orientation="Horizontal" Margin="0,5,0,0">
+                    <Label Text="Battery:" TextColor="#AAAAAA" VerticalOptions="Center"/>
+                    <Label Text="{Binding DeviceBatteryLevel, StringFormat='{0:F0}%'}" TextColor="#92D36E" FontAttributes="Bold" Margin="5,0" VerticalOptions="Center"/>
+
+                    <Label Text="Signal:" TextColor="#AAAAAA" Margin="10,0,0,0" VerticalOptions="Center"/>
+                    <Label Text="{Binding DeviceSignalQuality, StringFormat='{0:P0}'}" TextColor="#92D36E" FontAttributes="Bold" Margin="5,0" VerticalOptions="Center"/>
+                </StackLayout>
+
+                <Button Grid.Row="2" IsVisible="{Binding NoDeviceConnected}" 
+                Text="Go to Devices" 
+                Command="{Binding NavigateToDevicesCommand}" 
+                Style="{StaticResource PrimaryButtonStyle}" 
+                Margin="0,5,0,0"/>
+            </Grid>
+        </Frame>
+
         <!-- Main Content Area -->
         <Grid Grid.Row="1" Grid.Column="0" RowDefinitions="Auto,*,Auto">
             <!-- OBS Scene Selection -->

@@ -244,16 +244,61 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
         {
             try
             {
-                var muses = museManager.GetMuses();
-                var deviceInfos = new List<IBCIDeviceInfo>();
-                var uniqueMacs = new HashSet<string>(); // Add this line to track unique devices
+                Console.WriteLine("MuseListChanged: Processing updated device list");
 
-                // Convert Muse SDK objects to our model objects properly
+                // Get the latest list from the Muse SDK
+                var muses = museManager.GetMuses();
+
+                // Log how many devices were found
+                Console.WriteLine($"MuseListChanged: Raw device count from SDK: {muses?.Count ?? 0}");
+
+                // Early exit if no devices found
+                if (muses == null || muses.Count == 0)
+                {
+                    Console.WriteLine("MuseListChanged: No devices found in SDK response");
+
+                    // Update UI on the main thread with empty list
+                    if (dispatcher != null)
+                    {
+                        dispatcher.Dispatch(() =>
+                        {
+                            AvailableDevices.Clear();
+                            DeviceListChanged?.Invoke(this, new List<IBCIDeviceInfo>());
+                        });
+                    }
+                    else
+                    {
+                        AvailableDevices.Clear();
+                        DeviceListChanged?.Invoke(this, new List<IBCIDeviceInfo>());
+                    }
+
+                    return;
+                }
+
+                // Process devices with better duplicate detection
+                var deviceInfos = new List<IBCIDeviceInfo>();
+                var uniqueMacs = new HashSet<string>(); // Track unique devices by MAC address
+                var duplicateCount = 0;
+
+                // Debug each device found
                 foreach (var muse in muses)
                 {
+                    Console.WriteLine($"  Device found: '{muse.Name}' - MAC: {muse.BluetoothMac} - RSSI: {muse.RSSI}");
+
                     // Skip duplicates by MAC address
-                    if (!uniqueMacs.Add(muse.BluetoothMac)) // Add this line to skip duplicates
+                    if (!String.IsNullOrEmpty(muse.BluetoothMac) && !uniqueMacs.Add(muse.BluetoothMac))
+                    {
+                        Console.WriteLine($"  Skipping duplicate device: {muse.Name} ({muse.BluetoothMac})");
+                        duplicateCount++;
                         continue;
+                    }
+
+                    // Skip devices with empty/invalid names or MAC addresses
+                    if (String.IsNullOrEmpty(muse.Name) || String.IsNullOrEmpty(muse.BluetoothMac))
+                    {
+                        Console.WriteLine($"  Skipping device with invalid name or MAC: {muse.Name} ({muse.BluetoothMac})");
+                        continue;
+                    }
 
                     // Create a MuseDeviceInfo object from the Muse SDK object
                     var deviceInfo = new MuseDeviceInfo
@@ -264,7 +309,10 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
                     };
 
                     deviceInfos.Add(deviceInfo);
+                    Console.WriteLine($"  Added to available devices: {deviceInfo.Name} ({deviceInfo.DeviceId})");
                 }
+
+                Console.WriteLine($"MuseListChanged: Found {deviceInfos.Count} unique devices (filtered {duplicateCount} duplicates)");
 
                 // Update UI on the main thread
                 if (dispatcher != null)

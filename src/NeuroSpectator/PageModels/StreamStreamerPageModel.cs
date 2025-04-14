@@ -11,6 +11,7 @@ using NeuroSpectator.Services.Streaming;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NeuroSpectator.Services.Visualisation;
+using System.Diagnostics;
 
 namespace NeuroSpectator.PageModels
 {
@@ -21,6 +22,8 @@ namespace NeuroSpectator.PageModels
         private readonly OBSIntegrationService obsService;
         private readonly IMKIOStreamingService streamingService;
         private readonly BrainDataVisualisationService visualizationService;
+        private IDispatcherTimer deviceCheckTimer;
+        private const int DeviceCheckIntervalMs = 5000;
 
         private BrainDataOBSHelper brainDataObsHelper;
 
@@ -43,9 +46,6 @@ namespace NeuroSpectator.PageModels
 
         [ObservableProperty]
         private bool isConnectedToObs = false;
-
-        [ObservableProperty]
-        private bool isDeviceConnected = false;
 
         [ObservableProperty]
         private bool isLive = false;
@@ -99,6 +99,32 @@ namespace NeuroSpectator.PageModels
         private System.Timers.Timer streamTimer;
         private DateTime streamStartTime;
 
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(NoDeviceConnected))]
+        [NotifyPropertyChangedFor(nameof(CanStartStream))]
+        [NotifyPropertyChangedFor(nameof(DeviceStatusMessage))]
+        private bool isDeviceConnected = false;
+
+        [ObservableProperty]
+        private string connectedDeviceName = "No Device";
+
+        [ObservableProperty]
+        private string deviceStatusMessage = "No BCI device connected";
+
+        [ObservableProperty]
+        private double deviceSignalQuality = 0;
+
+        [ObservableProperty]
+        private double deviceBatteryLevel = 0;
+
+        [ObservableProperty]
+        private bool isCheckingDevice = false;
+
+        // Derived properties
+        public bool NoDeviceConnected => !IsDeviceConnected;
+
+        public bool CanStartStream => IsConnectedToObs && IsDeviceConnected && !IsLive;
+
         #endregion
 
         #region Commands
@@ -120,6 +146,7 @@ namespace NeuroSpectator.PageModels
         public ICommand ShowOBSSetupGuideCommand { get; }
         public ICommand DiagnoseObsCommand { get; }
         public ICommand ToggleVirtualCameraCommand { get; }
+        public ICommand RefreshDeviceStatusCommand { get; }
 
         #endregion
 
@@ -130,11 +157,11 @@ namespace NeuroSpectator.PageModels
             IMKIOStreamingService streamingService,
             BrainDataVisualisationService visualizationService)
         {
-            this.deviceManager = deviceManager;
-            this.connectionManager = connectionManager;
-            this.obsService = obsService;
-            this.streamingService = streamingService;
-            this.visualizationService = visualizationService;
+            this.deviceManager = deviceManager ?? throw new ArgumentNullException(nameof(deviceManager));
+            this.connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
+            this.obsService = obsService ?? throw new ArgumentNullException(nameof(obsService));
+            this.streamingService = streamingService ?? throw new ArgumentNullException(nameof(streamingService));
+            this.visualizationService = visualizationService ?? throw new ArgumentNullException(nameof(visualizationService));
 
             // Initialize commands
             ConnectToObsCommand = new AsyncRelayCommand(ConnectToObsAsync);
@@ -154,6 +181,7 @@ namespace NeuroSpectator.PageModels
             ShowOBSSetupGuideCommand = new AsyncRelayCommand(ShowOBSSetupGuideAsync);
             DiagnoseObsCommand = new AsyncRelayCommand(DiagnoseOBSConnectionAsync);
             ToggleVirtualCameraCommand = new AsyncRelayCommand(ToggleVirtualCameraAsync);
+            RefreshDeviceStatusCommand = new AsyncRelayCommand(RefreshDeviceConnectionStatusAsync);
 
             // Subscribe to events
             obsService.ConnectionStatusChanged += OnObsConnectionStatusChanged;
@@ -164,6 +192,26 @@ namespace NeuroSpectator.PageModels
             streamingService.StatusChanged += OnStreamingStatusChanged;
             streamingService.StatisticsUpdated += OnStreamingStatsUpdated;
 
+            deviceManager.DeviceListChanged += OnDeviceListChanged;
+
+            if (connectionManager != null)
+            {
+                connectionManager.ConnectionStatusChanged += OnDeviceConnectionStatusChanged;
+                connectionManager.DeviceConnected += OnDeviceConnected;
+                connectionManager.DeviceDisconnected += OnDeviceDisconnected;
+            }
+
+            // Check for currently connected device
+            Task.Run(async () => await InitializeDeviceConnectionAsync());
+
+            // Subscribe to other events
+            obsService.ConnectionStatusChanged += OnObsConnectionStatusChanged;
+            obsService.StreamingStatusChanged += OnObsStreamingStatusChanged;
+            obsService.SceneChanged += OnObsSceneChanged;
+
+            streamingService.StatusChanged += OnStreamingStatusChanged;
+            streamingService.StatisticsUpdated += OnStreamingStatsUpdated;
+
             // Initialize brain metrics
             InitializeBrainMetrics();
 
@@ -171,6 +219,251 @@ namespace NeuroSpectator.PageModels
             streamTimer = new System.Timers.Timer(1000);
             streamTimer.Elapsed += OnStreamTimerElapsed;
         }
+
+        #region Device Connection Management
+
+        /// <summary>
+        /// Initializes the device connection status
+        /// </summary>
+        private async Task InitializeDeviceConnectionAsync()
+        {
+            try
+            {
+                Debug.WriteLine("StreamerPage: Initializing device connection");
+
+                // Check if there's already a connected device
+                if (deviceManager.CurrentDevice != null && deviceManager.CurrentDevice.IsConnected)
+                {
+                    await MainThread.InvokeOnMainThreadAsync(() => {
+                        IsDeviceConnected = true;
+                        ConnectedDeviceName = deviceManager.CurrentDevice.Name ?? "Unknown Device";
+                        DeviceStatusMessage = $"Connected to {ConnectedDeviceName}";
+                        Debug.WriteLine($"StreamerPage: Found connected device: {ConnectedDeviceName}");
+                    });
+
+                    // Set up event handlers for the connected device
+                    deviceManager.CurrentDevice.ConnectionStateChanged += OnDeviceConnectionStateChanged;
+                    deviceManager.CurrentDevice.BrainWaveDataReceived += OnBrainWaveDataReceived;
+
+                    // Get device info
+                    await UpdateDeviceInfoAsync(deviceManager.CurrentDevice);
+                }
+                else if (connectionManager != null)
+                {
+                    // Check connection manager as fallback
+                    var statusInfo = await connectionManager.RefreshConnectionStatusAsync();
+
+                    if (statusInfo.IsConnected)
+                    {
+                        await MainThread.InvokeOnMainThreadAsync(() => {
+                            IsDeviceConnected = true;
+                            ConnectedDeviceName = statusInfo.DeviceName ?? "Unknown Device";
+                            DeviceStatusMessage = $"Connected to {ConnectedDeviceName}";
+                            Debug.WriteLine($"StreamerPage: Found connected device via connection manager: {ConnectedDeviceName}");
+                        });
+                    }
+                    else
+                    {
+                        await MainThread.InvokeOnMainThreadAsync(() => {
+                            IsDeviceConnected = false;
+                            ConnectedDeviceName = "No Device";
+                            DeviceStatusMessage = "No BCI device connected";
+                            Debug.WriteLine("StreamerPage: No connected device found");
+                        });
+                    }
+                }
+
+                // Start device check timer
+                StartDeviceCheckTimer();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"StreamerPage: Error initializing device connection: {ex.Message}");
+                StatusMessage = $"Error checking device: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// Starts periodic device connection checking
+        /// </summary>
+        private void StartDeviceCheckTimer()
+        {
+            try
+            {
+                if (deviceCheckTimer != null)
+                {
+                    deviceCheckTimer.Stop();
+                }
+
+                deviceCheckTimer = Application.Current.Dispatcher.CreateTimer();
+                deviceCheckTimer.Interval = TimeSpan.FromMilliseconds(DeviceCheckIntervalMs);
+                deviceCheckTimer.Tick += async (s, e) => {
+                    try
+                    {
+                        await RefreshDeviceConnectionStatusAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"StreamerPage: Error in device check timer: {ex.Message}");
+                    }
+                };
+                deviceCheckTimer.Start();
+
+                Debug.WriteLine("StreamerPage: Started device check timer");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"StreamerPage: Error starting device check timer: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Stops the device check timer
+        /// </summary>
+        private void StopDeviceCheckTimer()
+        {
+            if (deviceCheckTimer != null)
+            {
+                deviceCheckTimer.Stop();
+                deviceCheckTimer = null;
+                Debug.WriteLine("StreamerPage: Stopped device check timer");
+            }
+        }
+
+        /// <summary>
+        /// Refreshes device connection status
+        /// </summary>
+        public async Task RefreshDeviceConnectionStatusAsync()
+        {
+            if (IsCheckingDevice)
+                return;
+
+            try
+            {
+                IsCheckingDevice = true;
+                Debug.WriteLine("StreamerPage: Refreshing device connection status");
+
+                bool wasConnected = IsDeviceConnected;
+                bool deviceFound = false;
+
+                // Check device manager first
+                if (deviceManager.CurrentDevice != null)
+                {
+                    bool isConnected = deviceManager.CurrentDevice.IsConnected;
+                    deviceFound = isConnected;
+
+                    if (isConnected)
+                    {
+                        IsDeviceConnected = true;
+                        ConnectedDeviceName = deviceManager.CurrentDevice.Name ?? "Unknown Device";
+                        DeviceStatusMessage = $"Connected to {ConnectedDeviceName}";
+
+                        // Update device info
+                        await UpdateDeviceInfoAsync(deviceManager.CurrentDevice);
+
+                        Debug.WriteLine($"StreamerPage: Connected device found: {ConnectedDeviceName}");
+                    }
+                }
+
+                // If no device found in device manager, check connection manager
+                if (!deviceFound && connectionManager != null)
+                {
+                    var statusInfo = await connectionManager.RefreshConnectionStatusAsync();
+
+                    if (statusInfo.IsConnected)
+                    {
+                        IsDeviceConnected = true;
+                        ConnectedDeviceName = statusInfo.DeviceName ?? "Unknown Device";
+                        DeviceStatusMessage = $"Connected to {ConnectedDeviceName}";
+
+                        deviceFound = true;
+                        Debug.WriteLine($"StreamerPage: Connected device found via connection manager: {ConnectedDeviceName}");
+                    }
+                }
+
+                // Update if no device found
+                if (!deviceFound)
+                {
+                    IsDeviceConnected = false;
+                    ConnectedDeviceName = "No Device";
+                    DeviceStatusMessage = "No BCI device connected";
+                    DeviceBatteryLevel = 0;
+                    DeviceSignalQuality = 0;
+
+                    Debug.WriteLine("StreamerPage: No connected device found");
+                }
+
+                // Update status message
+                StatusMessage = IsDeviceConnected
+                    ? $"Device '{ConnectedDeviceName}' connected."
+                    : "No BCI device connected. Connect a device in Your Devices.";
+
+                // If connection status changed, update UI properties
+                if (wasConnected != IsDeviceConnected)
+                {
+                    OnPropertyChanged(nameof(IsDeviceConnected));
+                    OnPropertyChanged(nameof(NoDeviceConnected));
+                    OnPropertyChanged(nameof(CanStartStream));
+                    OnPropertyChanged(nameof(DeviceStatusMessage));
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"StreamerPage: Error refreshing device status: {ex.Message}");
+                StatusMessage = $"Error checking device: {ex.Message}";
+            }
+            finally
+            {
+                IsCheckingDevice = false;
+            }
+        }
+
+        /// <summary>
+        /// Updates device information (battery, signal quality)
+        /// </summary>
+        private async Task UpdateDeviceInfoAsync(IBCIDevice device)
+        {
+            if (device == null || !device.IsConnected)
+                return;
+
+            try
+            {
+                // Get battery level
+                try
+                {
+                    double batteryLevel = await device.GetBatteryLevelAsync();
+                    DeviceBatteryLevel = batteryLevel;
+                    Debug.WriteLine($"StreamerPage: Device battery level: {batteryLevel}%");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"StreamerPage: Error getting battery level: {ex.Message}");
+                }
+
+                // Get signal quality if available
+                try
+                {
+                    double signalQuality = await device.GetSignalQualityAsync();
+                    DeviceSignalQuality = signalQuality;
+                    Debug.WriteLine($"StreamerPage: Device signal quality: {signalQuality:P0}");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"StreamerPage: Error getting signal quality: {ex.Message}");
+                }
+
+                // Update status message with battery info
+                DeviceStatusMessage = $"Connected to {device.Name} - Battery: {DeviceBatteryLevel:F0}%";
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"StreamerPage: Error updating device info: {ex.Message}");
+            }
+        }
+
+        #endregion
+
+        #region Brain Data Handling
 
         /// <summary>
         /// Initializes brain metrics with default values
@@ -189,43 +482,292 @@ namespace NeuroSpectator.PageModels
         }
 
         /// <summary>
+        /// Handles brain wave data received from the device
+        /// </summary>
+        private void OnBrainWaveDataReceived(object sender, BrainWaveDataEventArgs e)
+        {
+            try
+            {
+                // Process the brain wave data
+                ProcessBrainWaveData(e.BrainWaveData);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"StreamerPage: Error processing brain wave data: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Processes a brain wave data packet
+        /// </summary>
+        private void ProcessBrainWaveData(BrainWaveData data)
+        {
+            // Process different types of brain wave data
+            switch (data.WaveType)
+            {
+                case BrainWaveTypes.Alpha:
+                    UpdateBrainMetric("Alpha Wave", ClassifyWaveLevel(data.AverageValue), $"{data.AverageValue:F1}μV");
+                    break;
+
+                case BrainWaveTypes.Beta:
+                    UpdateBrainMetric("Beta Wave", ClassifyWaveLevel(data.AverageValue), $"{data.AverageValue:F1}μV");
+                    break;
+
+                case BrainWaveTypes.Theta:
+                    UpdateBrainMetric("Theta Wave", ClassifyWaveLevel(data.AverageValue), $"{data.AverageValue:F1}μV");
+                    break;
+
+                case BrainWaveTypes.Delta:
+                    UpdateBrainMetric("Delta Wave", ClassifyWaveLevel(data.AverageValue), $"{data.AverageValue:F1}μV");
+                    break;
+
+                case BrainWaveTypes.Gamma:
+                    UpdateBrainMetric("Gamma Wave", ClassifyWaveLevel(data.AverageValue), $"{data.AverageValue:F1}μV");
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Updates a brain metric with new data
+        /// </summary>
+        private void UpdateBrainMetric(string metricName, string level, string value)
+        {
+            if (BrainMetrics.ContainsKey(metricName))
+            {
+                // Update on the UI thread
+                MainThread.BeginInvokeOnMainThread(() => {
+                    BrainMetrics[metricName] = value;
+                });
+            }
+        }
+
+        /// <summary>
+        /// Classifies a wave level as Low, Medium, or High
+        /// </summary>
+        private string ClassifyWaveLevel(double value)
+        {
+            // These thresholds would need to be calibrated for your specific BCI device
+            if (value < 30)
+                return "Low";
+            else if (value < 60)
+                return "Medium";
+            else
+                return "High";
+        }
+
+        #endregion
+
+        #region Event Handlers
+
+        /// <summary>
+        /// Handles the DeviceListChanged event
+        /// </summary>
+        private void OnDeviceListChanged(object sender, System.Collections.Generic.List<IBCIDeviceInfo> devices)
+        {
+            Debug.WriteLine($"StreamerPage: Device list changed - {devices.Count} devices available");
+        }
+
+        /// <summary>
+        /// Handles the ConnectionStateChanged event from the device
+        /// </summary>
+        private async void OnDeviceConnectionStateChanged(object sender, ConnectionStateChangedEventArgs e)
+        {
+            Debug.WriteLine($"StreamerPage: Device connection state changed {e.OldState} -> {e.NewState}");
+
+            await MainThread.InvokeOnMainThreadAsync(async () => {
+                // If the state is now Connected or Disconnected, refresh device status
+                if (e.NewState == ConnectionState.Connected || e.NewState == ConnectionState.Disconnected)
+                {
+                    await RefreshDeviceConnectionStatusAsync();
+                }
+            });
+        }
+
+        /// <summary>
+        /// Handles the ConnectionStatusChanged event from the connection manager
+        /// </summary>
+        private async void OnDeviceConnectionStatusChanged(object sender, ConnectionStatusChangedEventArgs e)
+        {
+            Debug.WriteLine($"StreamerPage: Connection status changed {e.OldStatus} -> {e.NewStatus}");
+
+            // Refresh device status on UI thread
+            await MainThread.InvokeOnMainThreadAsync(async () => {
+                await RefreshDeviceConnectionStatusAsync();
+            });
+        }
+
+        /// <summary>
+        /// Handles the DeviceConnected event from the connection manager
+        /// </summary>
+        private async void OnDeviceConnected(object sender, IBCIDevice device)
+        {
+            Debug.WriteLine($"StreamerPage: Device connected event: {device.Name}");
+
+            await MainThread.InvokeOnMainThreadAsync(async () => {
+                // Update connection status
+                IsDeviceConnected = true;
+                ConnectedDeviceName = device.Name ?? "Unknown Device";
+                DeviceStatusMessage = $"Connected to {ConnectedDeviceName}";
+
+                // Update device info
+                await UpdateDeviceInfoAsync(device);
+
+                // Setup event handlers for the connected device
+                device.ConnectionStateChanged += OnDeviceConnectionStateChanged;
+                device.BrainWaveDataReceived += OnBrainWaveDataReceived;
+
+                StatusMessage = $"Device '{ConnectedDeviceName}' connected.";
+
+                // Update dependent properties
+                OnPropertyChanged(nameof(NoDeviceConnected));
+                OnPropertyChanged(nameof(CanStartStream));
+                OnPropertyChanged(nameof(DeviceStatusMessage));
+            });
+        }
+
+        /// <summary>
+        /// Handles the DeviceDisconnected event from the connection manager
+        /// </summary>
+        private async void OnDeviceDisconnected(object sender, IBCIDevice device)
+        {
+            Debug.WriteLine($"StreamerPage: Device disconnected event: {device.Name}");
+
+            await MainThread.InvokeOnMainThreadAsync(async () => {
+                // Refresh device status
+                await RefreshDeviceConnectionStatusAsync();
+
+                // If we're streaming and the device disconnects, end the stream
+                if (IsLive)
+                {
+                    StatusMessage = "Device disconnected - ending stream";
+                    await EndStreamAsync();
+                }
+                else
+                {
+                    StatusMessage = "Device disconnected";
+                }
+            });
+        }
+
+        #endregion
+
+        #region Page Lifecycle
+
+        /// <summary>
         /// Called when the page appears
         /// </summary>
         public async Task OnAppearingAsync()
         {
-            // Check if OBS is connected
-            IsConnectedToObs = obsService.IsConnected;
-
-            if (IsConnectedToObs)
+            try
             {
-                await RefreshObsInfoAsync();
+                StatusMessage = "Initializing...";
 
-                // Set up preview URL
-                await SetupVirtualCameraPreviewAsync();
+                // Check if OBS is connected
+                IsConnectedToObs = obsService.IsConnected;
+
+                if (IsConnectedToObs)
+                {
+                    await RefreshObsInfoAsync();
+
+                    // Set up preview URL
+                    await SetupVirtualCameraPreviewAsync();
+
+                    StatusMessage = "Connected to OBS";
+                }
+                else
+                {
+                    StatusMessage = "Not connected to OBS";
+                }
+
+                // Check device connection status
+                await RefreshDeviceConnectionStatusAsync();
+
+                // Start device check timer if not already started
+                StartDeviceCheckTimer();
             }
-
-            // Check device connection status
-            await RefreshDeviceConnectionStatusAsync();
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error in OnAppearingAsync: {ex.Message}");
+                StatusMessage = $"Error: {ex.Message}";
+            }
         }
 
         /// <summary>
-        /// Refreshes the device connection status
+        /// Called when the page disappears
         /// </summary>
-        private async Task RefreshDeviceConnectionStatusAsync()
+        public async Task OnDisappearingAsync()
         {
-            // Check device connection status
-            var statusInfo = await connectionManager.RefreshConnectionStatusAsync();
-            IsDeviceConnected = statusInfo.IsConnected;
+            try
+            {
+                // Stop device check timer
+                StopDeviceCheckTimer();
 
-            if (IsDeviceConnected)
-            {
-                StatusMessage = $"Device '{statusInfo.DeviceName}' connected. Ready to stream.";
+                // If streaming, ask user if they want to end the stream
+                if (IsLive)
+                {
+                    bool endStream = await Application.Current.MainPage.DisplayAlert(
+                        "End Stream?",
+                        "You are currently streaming. Do you want to end the stream?",
+                        "End Stream", "Keep Streaming");
+
+                    if (endStream)
+                    {
+                        await EndStreamAsync();
+                    }
+                }
             }
-            else
+            catch (Exception ex)
             {
-                StatusMessage = "No BCI device connected. Connect a device in Your Devices.";
+                Debug.WriteLine($"Error in OnDisappearingAsync: {ex.Message}");
             }
         }
+
+        /// <summary>
+        /// Cleans up resources
+        /// </summary>
+        public void Cleanup()
+        {
+            try
+            {
+                // Stop timers
+                StopDeviceCheckTimer();
+                streamTimer?.Stop();
+
+                // Unsubscribe from events
+                if (deviceManager != null)
+                {
+                    deviceManager.DeviceListChanged -= OnDeviceListChanged;
+
+                    if (deviceManager.CurrentDevice != null)
+                    {
+                        deviceManager.CurrentDevice.ConnectionStateChanged -= OnDeviceConnectionStateChanged;
+                        deviceManager.CurrentDevice.BrainWaveDataReceived -= OnBrainWaveDataReceived;
+                    }
+                }
+
+                if (connectionManager != null)
+                {
+                    connectionManager.ConnectionStatusChanged -= OnDeviceConnectionStatusChanged;
+                    connectionManager.DeviceConnected -= OnDeviceConnected;
+                    connectionManager.DeviceDisconnected -= OnDeviceDisconnected;
+                }
+
+                // Clean up brain data helper
+                if (brainDataObsHelper != null)
+                {
+                    brainDataObsHelper.Dispose();
+                    brainDataObsHelper = null;
+                }
+
+                Debug.WriteLine("StreamerPage: Cleanup completed");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error in Cleanup: {ex.Message}");
+            }
+        }
+
+        #endregion
 
         #region Command Implementations
 
@@ -977,29 +1519,6 @@ namespace NeuroSpectator.PageModels
         private void OnObsSceneChanged(object sender, string sceneName)
         {
             ObsScene = sceneName;
-        }
-
-        /// <summary>
-        /// Handles device connection status changes
-        /// </summary>
-        private void OnDeviceConnectionStatusChanged(object sender, ConnectionStatusChangedEventArgs e)
-        {
-            IsDeviceConnected = e.NewStatus == DeviceConnectionStatus.Connected;
-
-            if (e.NewStatus == DeviceConnectionStatus.Connected)
-            {
-                StatusMessage = "Device connected";
-            }
-            else
-            {
-                StatusMessage = "Device disconnected";
-
-                // If we're streaming and the device disconnects, we need to end the stream
-                if (IsLive)
-                {
-                    MainThread.BeginInvokeOnMainThread(async () => await EndStreamAsync());
-                }
-            }
         }
 
         /// <summary>

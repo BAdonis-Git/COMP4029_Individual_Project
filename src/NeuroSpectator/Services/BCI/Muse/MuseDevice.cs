@@ -539,81 +539,53 @@ namespace NeuroSpectator.Services.BCI.Muse
         }
 
         /// <summary>
-        /// Gets the battery level as a percentage
+        /// Gets the battery level as a percentage with improved error handling and debugging
         /// </summary>
         public async Task<double> GetBatteryLevelAsync()
         {
             if (!IsConnected)
+            {
+                Debug.WriteLine("GetBatteryLevelAsync: Device not connected");
                 return 0;
+            }
 
             try
             {
-                // First ensure battery data is enabled
-                try
+                // Check if museDevice is null
+                if (museDevice == null)
                 {
-                    // Enable battery data transmission explicitly
-                    museDevice.SetPreset(MusePreset.PRESET_21); // This preset should enable battery data
-
-                    // Give the device time to process the setting change
-                    await Task.Delay(1000);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Warning: Failed to enable battery data: {ex.Message}");
-                    // Continue anyway, as battery data might already be enabled
+                    Debug.WriteLine("GetBatteryLevelAsync: museDevice is null");
+                    return 0;
                 }
 
-                // Add a retry mechanism with longer delays
-                int retryCount = 0;
-                const int maxRetries = 5;
-                const int retryDelayMs = 1000; // Increased to 1 second between attempts
+                // Add detailed logging
+                Debug.WriteLine("GetBatteryLevelAsync: Attempting to get configuration");
 
-                while (retryCount < maxRetries)
+                // Get the configuration with try/catch
+                var config = museDevice.GetMuseConfiguration();
+
+                // Check if config is null
+                if (config == null)
                 {
-                    try
-                    {
-                        // Get the configuration and check if it's valid
-                        var config = museDevice.GetMuseConfiguration();
-
-                        // Check if config is valid and battery data is enabled
-                        if (config != null && config.BatteryDataEnabled)
-                        {
-                            return config.BatteryPercentRemaining;
-                        }
-                        else
-                        {
-                            Debug.WriteLine($"Battery attempt {retryCount + 1}: Config valid but battery data disabled or null config");
-                            retryCount++;
-
-                            if (retryCount >= maxRetries)
-                                break;
-
-                            // Wait longer before retrying
-                            await Task.Delay(retryDelayMs * retryCount); // Increase delay with each attempt
-                        }
-                    }
-                    catch (Exception innerEx)
-                    {
-                        Debug.WriteLine($"Battery level attempt {retryCount + 1} failed: {innerEx.Message}");
-                        retryCount++;
-
-                        if (retryCount >= maxRetries)
-                            break; // Break loop on last attempt instead of throwing
-
-                        // Wait before retrying with increasing delay
-                        await Task.Delay(retryDelayMs * retryCount);
-                    }
+                    Debug.WriteLine("GetBatteryLevelAsync: Configuration is null");
+                    return 0;
                 }
 
-                // Fallback if all retries fail
-                Debug.WriteLine("All battery level attempts failed, returning default value");
-                return 75; // Return a default value that won't alarm users
+                // Log the battery value
+                Debug.WriteLine($"GetBatteryLevelAsync: Battery level: {config.BatteryPercentRemaining}%");
+
+                // Ensure the value is within reasonable bounds (0-100)
+                double batteryLevel = Math.Clamp(config.BatteryPercentRemaining, 0, 100);
+                return batteryLevel;
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"Error getting battery level: {ex.Message}");
+                Debug.WriteLine($"Stack trace: {ex.StackTrace}");
                 ErrorOccurred?.Invoke(this, new BCIErrorEventArgs($"Error getting battery level: {ex.Message}", ex));
-                return 75; // Return a sensible default on error
+
+                // Return a default value on error
+                return 0;
             }
         }
 
