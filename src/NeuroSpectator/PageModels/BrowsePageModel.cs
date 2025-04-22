@@ -6,6 +6,7 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NeuroSpectator.Models.BCI.Common;
+using NeuroSpectator.Models.Stream;
 using NeuroSpectator.Services;
 using NeuroSpectator.Services.BCI.Interfaces;
 
@@ -53,13 +54,12 @@ namespace NeuroSpectator.PageModels
         private void LoadPlaceholderData()
         {
             // In a real implementation, this would load from a service
-            AvailableStreams.Add(new StreamInfo
+            availableStreams.Add(new StreamInfo
             {
                 Id = "Stream1",
                 StreamerName = "Streamer1",
                 Title = "CS:GO Tournament",
                 Game = "Counter-Strike: Global Offensive",
-                Category = "FPS",
                 ViewerCount = 1245,
                 IsLive = true,
                 BrainMetrics = new Dictionary<string, string>
@@ -69,13 +69,12 @@ namespace NeuroSpectator.PageModels
                 }
             });
 
-            AvailableStreams.Add(new StreamInfo
+            availableStreams.Add(new StreamInfo
             {
                 Id = "Stream2",
                 StreamerName = "Streamer2",
                 Title = "League of Legends",
                 Game = "League of Legends",
-                Category = "MOBA",
                 ViewerCount = 983,
                 IsLive = true,
                 BrainMetrics = new Dictionary<string, string>
@@ -85,13 +84,12 @@ namespace NeuroSpectator.PageModels
                 }
             });
 
-            AvailableStreams.Add(new StreamInfo
+            availableStreams.Add(new StreamInfo
             {
                 Id = "Stream3",
                 StreamerName = "Streamer3",
                 Title = "Apex Legends",
                 Game = "Apex Legends",
-                Category = "FPS",
                 ViewerCount = 756,
                 IsLive = true,
                 BrainMetrics = new Dictionary<string, string>
@@ -101,13 +99,12 @@ namespace NeuroSpectator.PageModels
                 }
             });
 
-            AvailableStreams.Add(new StreamInfo
+            availableStreams.Add(new StreamInfo
             {
                 Id = "Stream4",
                 StreamerName = "Streamer4",
                 Title = "Minecraft",
                 Game = "Minecraft",
-                Category = "Simulation",
                 ViewerCount = 645,
                 IsLive = true,
                 BrainMetrics = new Dictionary<string, string>
@@ -117,13 +114,12 @@ namespace NeuroSpectator.PageModels
                 }
             });
 
-            AvailableStreams.Add(new StreamInfo
+            availableStreams.Add(new StreamInfo
             {
                 Id = "Stream5",
                 StreamerName = "Streamer5",
                 Title = "Valorant",
                 Game = "Valorant",
-                Category = "FPS",
                 ViewerCount = 512,
                 IsLive = true,
                 BrainMetrics = new Dictionary<string, string>
@@ -133,13 +129,12 @@ namespace NeuroSpectator.PageModels
                 }
             });
 
-            AvailableStreams.Add(new StreamInfo
+            availableStreams.Add(new StreamInfo
             {
                 Id = "Stream6",
                 StreamerName = "Streamer6",
                 Title = "Rocket League",
                 Game = "Rocket League",
-                Category = "Sports",
                 ViewerCount = 394,
                 IsLive = true,
                 BrainMetrics = new Dictionary<string, string>
@@ -237,20 +232,5 @@ namespace NeuroSpectator.PageModels
             // };
             // await Shell.Current.GoToAsync("//StreamSpectatorPage", parameters);
         }
-    }
-
-    /// <summary>
-    /// Model for stream information
-    /// </summary>
-    public class StreamInfo
-    {
-        public string Id { get; set; }
-        public string StreamerName { get; set; }
-        public string Title { get; set; }
-        public string Game { get; set; }
-        public string Category { get; set; }
-        public int ViewerCount { get; set; }
-        public bool IsLive { get; set; }
-        public Dictionary<string, string> BrainMetrics { get; set; } = new Dictionary<string, string>();
     }
 }

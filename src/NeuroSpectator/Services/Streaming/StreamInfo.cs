@@ -1,13 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 
-namespace NeuroSpectator.Services.Streaming
+namespace NeuroSpectator.Models.Stream
 {
     /// <summary>
-    /// Represents information about a stream
+    /// Represents information about a stream for display in the UI.
+    /// This is a simplified model that represents what's needed for the UI rather than
+    /// mapping directly to the MK.IO API models.
     /// </summary>
     public class StreamInfo
     {
@@ -108,55 +107,7 @@ namespace NeuroSpectator.Services.Streaming
     }
 
     /// <summary>
-    /// Defines methods for screen capture
-    /// </summary>
-    public interface IScreenCaptureService : IDisposable
-    {
-        /// <summary>
-        /// Starts capturing the screen
-        /// </summary>
-        Task StartCaptureAsync(int frameRate = 30, string targetWindow = null);
-
-        /// <summary>
-        /// Stops capturing the screen
-        /// </summary>
-        Task StopCaptureAsync();
-
-        /// <summary>
-        /// Takes a screenshot
-        /// </summary>
-        Task<Stream> TakeScreenshotAsync(string outputFormat = "jpg");
-
-        /// <summary>
-        /// Gets whether capture is active
-        /// </summary>
-        bool IsCapturing { get; }
-
-        /// <summary>
-        /// Event fired when a new frame is captured
-        /// </summary>
-        event EventHandler<byte[]> FrameCaptured;
-
-        /// <summary>
-        /// Event fired when the capture fails
-        /// </summary>
-        event EventHandler<Exception> CaptureFailed;
-    }
-
-    /// <summary>
-    /// Streaming service status
-    /// </summary>
-    public enum StreamingStatus
-    {
-        Idle,
-        Starting,
-        Streaming,
-        Stopping,
-        Error
-    }
-
-    /// <summary>
-    /// Stream quality settings
+    /// Defines quality settings for a stream
     /// </summary>
     public class StreamQualitySettings
     {
@@ -169,88 +120,19 @@ namespace NeuroSpectator.Services.Streaming
     }
 
     /// <summary>
-    /// Defines methods for streaming to MK.IO
+    /// Streaming status enum
     /// </summary>
-    public interface IMKIOStreamingService : IDisposable
+    public enum StreamingStatus
     {
-        /// <summary>
-        /// Creates a new stream
-        /// </summary>
-        Task<StreamInfo> CreateStreamAsync(string title, string description, string game, List<string> tags = null);
-
-        /// <summary>
-        /// Updates an existing stream
-        /// </summary>
-        Task<StreamInfo> UpdateStreamAsync(string streamId, string title = null, string description = null, string game = null, List<string> tags = null);
-
-        /// <summary>
-        /// Starts streaming to MK.IO
-        /// </summary>
-        Task<bool> StartStreamingAsync(string streamId, StreamQualitySettings qualitySettings = null, CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// Stops the current stream
-        /// </summary>
-        Task<bool> StopStreamingAsync(string streamId);
-
-        /// <summary>
-        /// Creates a VOD from a live stream
-        /// </summary>
-        Task<StreamInfo> CreateVodFromStreamAsync(string streamId, string title = null);
-
-        /// <summary>
-        /// Gets the current streaming status
-        /// </summary>
-        StreamingStatus Status { get; }
-
-        /// <summary>
-        /// Gets information about the currently active stream
-        /// </summary>
-        StreamInfo CurrentStream { get; }
-
-        /// <summary>
-        /// Gets a list of available streams
-        /// </summary>
-        Task<List<StreamInfo>> GetAvailableStreamsAsync(bool includeLiveOnly = false, string game = null, string search = null);
-
-        /// <summary>
-        /// Gets a specific stream by ID
-        /// </summary>
-        Task<StreamInfo> GetStreamAsync(string streamId);
-
-        /// <summary>
-        /// Gets a list of available VODs
-        /// </summary>
-        Task<List<StreamInfo>> GetAvailableVodsAsync(string userId = null, string game = null, string search = null);
-
-        /// <summary>
-        /// Uploads a thumbnail for a stream
-        /// </summary>
-        Task<bool> UploadThumbnailAsync(string streamId, Stream thumbnailStream);
-
-        /// <summary>
-        /// Generates a thumbnail from the current stream
-        /// </summary>
-        Task<bool> GenerateThumbnailAsync(string streamId);
-
-        /// <summary>
-        /// Event fired when streaming status changes
-        /// </summary>
-        event EventHandler<StreamingStatus> StatusChanged;
-
-        /// <summary>
-        /// Event fired when an error occurs during streaming
-        /// </summary>
-        event EventHandler<Exception> StreamingError;
-
-        /// <summary>
-        /// Event fired regularly with streaming statistics
-        /// </summary>
-        event EventHandler<StreamingStatistics> StatisticsUpdated;
+        Idle,
+        Starting,
+        Streaming,
+        Stopping,
+        Error
     }
 
     /// <summary>
-    /// Statistics for streaming
+    /// Contains streaming statistics
     /// </summary>
     public class StreamingStatistics
     {
@@ -288,74 +170,5 @@ namespace NeuroSpectator.Services.Streaming
         /// Timestamp when the statistics were collected
         /// </summary>
         public DateTime Timestamp { get; set; } = DateTime.Now;
-    }
-
-    /// <summary>
-    /// Defines methods for the player component
-    /// </summary>
-    public interface IMKIOPlayerService
-    {
-        /// <summary>
-        /// Initializes the player with a stream URL
-        /// </summary>
-        Task InitializePlayerAsync(string streamId, bool isLive = true);
-
-        /// <summary>
-        /// Plays the stream
-        /// </summary>
-        Task PlayAsync();
-
-        /// <summary>
-        /// Pauses the stream
-        /// </summary>
-        Task PauseAsync();
-
-        /// <summary>
-        /// Seeks to a specific position in the stream (for VODs)
-        /// </summary>
-        Task SeekAsync(TimeSpan position);
-
-        /// <summary>
-        /// Sets the volume
-        /// </summary>
-        Task SetVolumeAsync(double volume);
-
-        /// <summary>
-        /// Gets the current playback state
-        /// </summary>
-        Task<bool> IsPlayingAsync();
-
-        /// <summary>
-        /// Gets the current position in the stream
-        /// </summary>
-        Task<TimeSpan> GetCurrentPositionAsync();
-
-        /// <summary>
-        /// Gets the duration of the stream
-        /// </summary>
-        Task<TimeSpan> GetDurationAsync();
-
-        /// <summary>
-        /// Gets or sets whether the player is muted
-        /// </summary>
-        Task<bool> IsMutedAsync();
-        Task SetMutedAsync(bool muted);
-
-        /// <summary>
-        /// Gets or sets the player quality
-        /// </summary>
-        Task<string> GetCurrentQualityAsync();
-        Task<List<string>> GetAvailableQualitiesAsync();
-        Task SetQualityAsync(string quality);
-
-        /// <summary>
-        /// Event fired when the player state changes
-        /// </summary>
-        event EventHandler<string> PlayerStateChanged;
-
-        /// <summary>
-        /// Event fired when an error occurs in the player
-        /// </summary>
-        event EventHandler<Exception> PlayerError;
     }
 }

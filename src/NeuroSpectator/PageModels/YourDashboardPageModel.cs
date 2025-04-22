@@ -6,9 +6,11 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NeuroSpectator.Models.BCI.Common;
+using NeuroSpectator.Models.Stream;
 using NeuroSpectator.Services;
 using NeuroSpectator.Services.BCI;
 using NeuroSpectator.Services.BCI.Interfaces;
+using NeuroSpectator.Services.Streaming;
 
 namespace NeuroSpectator.PageModels
 {
@@ -17,6 +19,7 @@ namespace NeuroSpectator.PageModels
     /// </summary>
     public partial class YourDashboardPageModel : ObservableObject, IDisposable
     {
+        private readonly IMKIOStreamingService streamingService;
         private readonly IBCIDeviceManager deviceManager;
         private readonly DeviceConnectionManager connectionManager;
         private IDispatcherTimer batteryUpdateTimer;
@@ -43,9 +46,6 @@ namespace NeuroSpectator.PageModels
         private Services.DeviceSettingsModel currentDeviceSettings = new Services.DeviceSettingsModel();
 
         [ObservableProperty]
-        private ObservableCollection<FeaturedStreamModel> featuredStreams = new ObservableCollection<FeaturedStreamModel>();
-
-        [ObservableProperty]
         private ObservableCollection<RecentActivityModel> recentActivities = new ObservableCollection<RecentActivityModel>();
 
         [ObservableProperty]
@@ -56,6 +56,16 @@ namespace NeuroSpectator.PageModels
 
         [ObservableProperty]
         private bool isCheckingConnection = false;
+
+        [ObservableProperty]
+        private ObservableCollection<StreamInfo> featuredStreams = new ObservableCollection<StreamInfo>();
+
+        [ObservableProperty]
+        private ObservableCollection<StreamInfo> recentVods = new ObservableCollection<StreamInfo>();
+
+        [ObservableProperty]
+        private bool isLoadingStreams = false;
+
 
         // Derived Properties
         public bool IsNotConnected => !IsConnected;
@@ -72,14 +82,15 @@ namespace NeuroSpectator.PageModels
         /// <summary>
         /// Creates a new instance of the YourDashboardPageModel class
         /// </summary>
-        public YourDashboardPageModel(IBCIDeviceManager deviceManager, DeviceConnectionManager connectionManager = null)
+        public YourDashboardPageModel(IBCIDeviceManager deviceManager, DeviceConnectionManager connectionManager = null, IMKIOStreamingService streamingService = null)
         {
             this.deviceManager = deviceManager ?? throw new ArgumentNullException(nameof(deviceManager));
             this.connectionManager = connectionManager;
+            this.streamingService = streamingService;
 
             // Initialize commands
             NavigateToDevicesCommand = new AsyncRelayCommand(NavigateToDevicesAsync);
-            ViewStreamCommand = new AsyncRelayCommand<FeaturedStreamModel>(ViewStreamAsync);
+            ViewStreamCommand = new AsyncRelayCommand<StreamInfo>(ViewStreamAsync);
             ViewCategoryCommand = new AsyncRelayCommand<CategoryModel>(ViewCategoryAsync);
             RefreshConnectionCommand = new AsyncRelayCommand(RefreshConnectionStatusAsync);
 
@@ -115,7 +126,7 @@ namespace NeuroSpectator.PageModels
         private void LoadPlaceholderData()
         {
             // Featured streams
-            FeaturedStreams.Add(new FeaturedStreamModel
+            FeaturedStreams.Add(new StreamInfo
             {
                 StreamerName = "ProGamer123",
                 Title = "CS:GO Tournament Finals",
@@ -125,7 +136,7 @@ namespace NeuroSpectator.PageModels
                 BrainMetrics = new Dictionary<string, string> { { "Focus", "87%" }, { "Alpha", "High" } }
             });
 
-            FeaturedStreams.Add(new FeaturedStreamModel
+            FeaturedStreams.Add(new StreamInfo
             {
                 StreamerName = "StrategyMaster",
                 Title = "Starcraft 2 Ladder Grinding",
@@ -135,7 +146,7 @@ namespace NeuroSpectator.PageModels
                 BrainMetrics = new Dictionary<string, string> { { "Focus", "92%" }, { "Alpha", "Medium" } }
             });
 
-            FeaturedStreams.Add(new FeaturedStreamModel
+            FeaturedStreams.Add(new StreamInfo
             {
                 StreamerName = "SpeedRunChamp",
                 Title = "Elden Ring Speedrun Attempts",
@@ -199,14 +210,29 @@ namespace NeuroSpectator.PageModels
                     // Start connection monitoring
                     StartConnectionMonitoring();
 
+                    // Load MK.IO streams if streaming service is available
+                    if (streamingService != null)
+                    {
+                        await LoadMkioStreamsAsync();
+                    }
+                    else
+                    {
+                        // Fall back to placeholder data if no streaming service
+                        LoadPlaceholderData();
+                    }
+
                     IsInitialized = true;
                 }
                 else
                 {
-                    Debug.WriteLine("Dashboard: OnAppearingAsync - Subsequent appearance");
-
-                    // Quick refresh of connection status
+                    // Refresh connection status for subsequent appearances
                     await RefreshConnectionStatusAsync();
+
+                    // Refresh streams
+                    if (streamingService != null)
+                    {
+                        await LoadMkioStreamsAsync();
+                    }
                 }
             }
             catch (Exception ex)
@@ -250,6 +276,80 @@ namespace NeuroSpectator.PageModels
             catch (Exception ex)
             {
                 Debug.WriteLine($"Error starting connection monitoring: {ex.Message}");
+            }
+        }
+
+        // Method to load MK.IO streams
+        private async Task LoadMkioStreamsAsync()
+        {
+            try
+            {
+                IsLoadingStreams = true;
+
+                // Get live streams
+                var liveStreams = await streamingService.GetAvailableStreamsAsync(true);
+
+                // Update the featured streams collection on UI thread
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    FeaturedStreams.Clear();
+                    foreach (var stream in liveStreams.Take(5)) // Limit to 5 streams
+                    {
+                        FeaturedStreams.Add(stream);
+                    }
+                });
+
+                // Get VODs
+                var vods = await streamingService.GetAvailableVodsAsync();
+
+                // Update the recent VODs collection on UI thread
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    RecentVods.Clear();
+                    foreach (var vod in vods.Take(5)) // Limit to 5 VODs
+                    {
+                        RecentVods.Add(vod);
+                    }
+                });
+
+                // If no streams were found, load placeholder data
+                if (FeaturedStreams.Count == 0 && RecentVods.Count == 0)
+                {
+                    LoadPlaceholderData();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error loading MK.IO streams: {ex.Message}");
+                // Fall back to placeholder data
+                LoadPlaceholderData();
+            }
+            finally
+            {
+                IsLoadingStreams = false;
+            }
+        }
+
+        // Method to view a stream
+        private async Task ViewStreamAsync(StreamInfo stream)
+        {
+            if (stream == null) return;
+
+            try
+            {
+                // Navigation parameters
+                var queryParameters = new Dictionary<string, object>
+        {
+            { "streamId", stream.Id }
+        };
+
+                // Navigate to the stream viewer page with the stream ID
+                await Shell.Current.GoToAsync($"//StreamSpectatorPage?streamId={stream.Id}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error navigating to stream: {ex.Message}");
+                await Shell.Current.DisplayAlert("Error", $"Could not open stream: {ex.Message}", "OK");
             }
         }
 
@@ -682,6 +782,8 @@ namespace NeuroSpectator.PageModels
                         connectionManager.DeviceConnected -= OnDeviceConnected;
                         connectionManager.DeviceDisconnected -= OnDeviceDisconnected;
                     }
+                    FeaturedStreams.Clear();
+                    RecentVods.Clear();
                 }
 
                 _disposed = true;

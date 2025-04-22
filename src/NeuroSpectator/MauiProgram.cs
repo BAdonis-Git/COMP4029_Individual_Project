@@ -13,6 +13,9 @@ using NeuroSpectator.Services.BCI;
 using Microsoft.Extensions.DependencyInjection;
 using CommunityToolkit.Maui;
 using Microsoft.Maui.Networking;
+using NeuroSpectator.Controls;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.Json;
 
 namespace NeuroSpectator;
 
@@ -41,6 +44,9 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
 
+        // Add configuration from appsettings.json
+        builder.Configuration.AddJsonFile("appsettings.json", optional: true);
+
         // Register MAUI services
         builder.Services.AddSingleton<IConnectivity>(provider => Connectivity.Current);
 
@@ -51,14 +57,16 @@ public static class MauiProgram
         builder.Services.AddBCIServices();
         builder.Services.AddApplicationServices();
 
-        // Register streaming and visualization services explicitly 
-        // (in addition to what's registered in AddStreamingServices)
+        // Register MK.IO streaming services
+        builder.Services.AddSingleton<MKIOConfig>(provider =>
+            new MKIOConfig(provider.GetRequiredService<IConfiguration>()));
+
+        builder.Services.AddSingleton<IMKIOStreamingService, MKIOStreamingService>();
+
+        // Register OBS integration and visualization services 
         builder.Services.AddSingleton<OBSIntegrationService>();
         builder.Services.AddSingleton<BrainDataVisualisationService>();
         builder.Services.AddSingleton<BrainDataJsonService>();
-        builder.Services.AddSingleton<IMKIOStreamingService, MKIOStreamingService>();
-
-        // Register the OBSSetupGuide - simplified registration
         builder.Services.AddTransient<OBSSetupGuide>();
 
         // Register the BrainDataOBSHelper with explicit dependencies
@@ -118,6 +126,9 @@ public static class MauiProgram
         builder.Services.AddTransient<DevicePresetsPage>();
         builder.Services.AddTransient<LoginPage>();
         builder.Services.AddTransient<YourAccountPage>();
+
+        // Register MKIOPlayer
+        builder.Services.AddTransient<MKIOPlayer>();
 
 #if DEBUG
         builder.Logging.AddDebug();

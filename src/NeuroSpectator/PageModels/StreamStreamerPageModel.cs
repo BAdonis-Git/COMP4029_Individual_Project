@@ -12,6 +12,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NeuroSpectator.Services.Visualisation;
 using System.Diagnostics;
+using NeuroSpectator.Models.Stream;
 
 namespace NeuroSpectator.PageModels
 {
@@ -1026,63 +1027,82 @@ namespace NeuroSpectator.PageModels
                     return;
                 }
 
-                // Start virtual camera if it's not already running
-                if (!IsVirtualCameraActive)
-                {
-                    try
-                    {
-                        await obsService.StartVirtualCameraAsync();
-                        IsVirtualCameraActive = true;
-                    }
-                    catch (Exception ex)
-                    {
-                        // Continue even if virtual camera fails
-                        StatusMessage = $"Warning: Could not start virtual camera: {ex.Message}";
-                    }
-                }
-
-                // Create the BrainDataOBSHelper now that we have a connected device
+                // Create a new stream in MK.IO
                 try
                 {
-                    // We'll create this using the service provider to ensure all dependencies are properly resolved
-                    brainDataObsHelper = MauiProgram.Services.GetService<BrainDataOBSHelper>();
+                    // Use the current title and game as the stream details
+                    var stream = await streamingService.CreateStreamAsync(
+                        StreamTitle,
+                        $"NeuroSpectator stream with brain data visualization for {GameCategory}",
+                        GameCategory,
+                        new List<string> { "NeuroSpectator", "BrainData", GameCategory }
+                    );
 
-                    if (brainDataObsHelper != null)
+                    // Update the UI with the stream information
+                    if (stream != null)
                     {
-                        // Subscribe to brain data events
-                        brainDataObsHelper.BrainMetricsUpdated += OnBrainMetricsUpdated;
-                        brainDataObsHelper.SignificantBrainEventDetected += OnSignificantBrainEventDetected;
-                        brainDataObsHelper.ErrorOccurred += OnBrainDataError;
+                        // Display the ingest URL and stream key for OBS setup
+                        await Shell.Current.DisplayAlert(
+                            "Stream Created",
+                            $"Stream created successfully!\n\n" +
+                            $"OBS Stream Settings:\n" +
+                            $"Service: Custom\n" +
+                            $"Server: {stream.IngestUrl}\n" +
+                            $"Stream Key: {stream.StreamKey}\n\n" +
+                            "Please configure OBS with these settings.",
+                            "OK"
+                        );
 
-                        // Start brain data monitoring
-                        await brainDataObsHelper.StartMonitoringAsync(true);
+                        // Start the stream in MK.IO
+                        await streamingService.StartStreamingAsync(stream.Id);
+
+                        // Create the BrainDataOBSHelper now that we have a connected device
+                        try
+                        {
+                            // We'll create this using the service provider to ensure all dependencies are properly resolved
+                            brainDataObsHelper = MauiProgram.Services.GetService<BrainDataOBSHelper>();
+
+                            if (brainDataObsHelper != null)
+                            {
+                                // Subscribe to brain data events
+                                brainDataObsHelper.BrainMetricsUpdated += OnBrainMetricsUpdated;
+                                brainDataObsHelper.SignificantBrainEventDetected += OnSignificantBrainEventDetected;
+                                brainDataObsHelper.ErrorOccurred += OnBrainDataError;
+
+                                // Start brain data monitoring
+                                await brainDataObsHelper.StartMonitoringAsync(true);
+                            }
+                            else
+                            {
+                                StatusMessage = "Failed to initialize brain data helper";
+                                return;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            StatusMessage = $"Error initializing brain data: {ex.Message}";
+                            return;
+                        }
+
+                        // Start the stream timer
+                        streamStartTime = DateTime.Now;
+                        streamTimer.Start();
+                        UpdateStreamTimeDisplay();
+
+                        // Set status
+                        StatusMessage = "Stream started";
+                        IsLive = true;
                     }
                     else
                     {
-                        StatusMessage = "Failed to initialize brain data helper";
-                        return;
+                        StatusMessage = "Failed to create stream";
                     }
                 }
                 catch (Exception ex)
                 {
-                    StatusMessage = $"Error initializing brain data: {ex.Message}";
+                    StatusMessage = $"Error creating MK.IO stream: {ex.Message}";
                     return;
                 }
-
-                // Start streaming in OBS
-                await obsService.StartStreamingAsync();
-
-                // Start the stream timer
-                streamStartTime = DateTime.Now;
-                streamTimer.Start();
-                UpdateStreamTimeDisplay();
-
-                // Refresh the preview
-                PreviewUrl = $"{visualizationService.GetPreviewUrl()}?refresh={DateTime.Now.Ticks}";
-
-                // Set status
-                StatusMessage = "Stream started";
-                IsLive = true;
             }
             catch (Exception ex)
             {
@@ -1102,8 +1122,45 @@ namespace NeuroSpectator.PageModels
             {
                 StatusMessage = "Ending stream...";
 
-                // Stop streaming in OBS
-                await obsService.StopStreamingAsync();
+                // Get the current stream from the streaming service
+                var currentStream = streamingService.CurrentStream;
+                if (currentStream != null)
+                {
+                    // Stop the MK.IO stream
+                    await streamingService.StopStreamingAsync(currentStream.Id);
+
+                    // Ask if user wants to create a VOD
+                    bool createVod = await Application.Current.MainPage.DisplayAlert(
+                        "Create VOD",
+                        "Would you like to create a Video On Demand (VOD) from this stream?",
+                        "Yes", "No");
+
+                    if (createVod)
+                    {
+                        try
+                        {
+                            // Create a VOD from the stream
+                            var vod = await streamingService.CreateVodFromStreamAsync(
+                                currentStream.Id,
+                                $"{StreamTitle} - {DateTime.Now:yyyy-MM-dd}");
+
+                            if (vod != null)
+                            {
+                                await Application.Current.MainPage.DisplayAlert(
+                                    "VOD Created",
+                                    $"VOD created successfully with title: {vod.Title}",
+                                    "OK");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            await Application.Current.MainPage.DisplayAlert(
+                                "VOD Creation Failed",
+                                $"Failed to create VOD: {ex.Message}",
+                                "OK");
+                        }
+                    }
+                }
 
                 // Stop brain data monitoring
                 if (brainDataObsHelper != null)
@@ -1118,21 +1175,6 @@ namespace NeuroSpectator.PageModels
 
                 // Stop the stream timer
                 streamTimer.Stop();
-
-                // Ask if user wants to stop virtual camera
-                bool stopCamera = await Application.Current.MainPage.DisplayAlert(
-                    "Virtual Camera",
-                    "Would you like to stop the OBS Virtual Camera?",
-                    "Yes", "No");
-
-                if (stopCamera && IsVirtualCameraActive)
-                {
-                    await obsService.StopVirtualCameraAsync();
-                    IsVirtualCameraActive = false;
-
-                    // Refresh the preview
-                    PreviewUrl = $"{visualizationService.GetPreviewUrl()}?refresh={DateTime.Now.Ticks}";
-                }
 
                 // Set status
                 StatusMessage = "Stream ended";

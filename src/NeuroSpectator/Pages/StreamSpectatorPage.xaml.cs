@@ -21,6 +21,12 @@ namespace NeuroSpectator.Pages
                 InitializeComponent();
                 _viewModel = viewModel;
                 BindingContext = viewModel;
+
+                // Pass the player reference to the view model
+                if (_viewModel != null)
+                {
+                    _viewModel.SetPlayer(streamPlayer);
+                }
             }
             catch (Exception ex)
             {
@@ -46,6 +52,24 @@ namespace NeuroSpectator.Pages
             {
                 Debug.WriteLine($"Error in StreamSpectatorPage.OnAppearing: {ex.Message}");
                 Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+            }
+        }
+
+        protected override async void OnDisappearing()
+        {
+            try
+            {
+                base.OnDisappearing();
+
+                // Clean up when the page disappears
+                if (_viewModel != null)
+                {
+                    await _viewModel.OnDisappearingAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error in StreamSpectatorPage.OnDisappearing: {ex.Message}");
             }
         }
 
