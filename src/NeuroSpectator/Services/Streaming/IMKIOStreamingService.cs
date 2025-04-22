@@ -73,6 +73,11 @@ namespace NeuroSpectator.Services.Streaming
         Task<bool> GenerateThumbnailAsync(string streamId);
 
         /// <summary>
+        /// Resets the streaming service status to Idle
+        /// </summary>
+        Task ResetStatusAsync();
+
+        /// <summary>
         /// Event fired when streaming status changes
         /// </summary>
         event EventHandler<StreamingStatus> StatusChanged;

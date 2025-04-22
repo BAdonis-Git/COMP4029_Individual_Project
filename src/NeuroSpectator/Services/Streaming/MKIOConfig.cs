@@ -148,6 +148,9 @@ namespace NeuroSpectator.Services.Streaming
             // Combine with hyphen separator
             string name = $"{prefix}-{hash}";
 
+            // CHANGE: Replace underscores with hyphens to avoid validation errors
+            name = name.Replace('_', '-');
+
             // Safety check (should never exceed max length with this approach)
             if (name.Length > maxLength)
                 name = name.Substring(0, maxLength);

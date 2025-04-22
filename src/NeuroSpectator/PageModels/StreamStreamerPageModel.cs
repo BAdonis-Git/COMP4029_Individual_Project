@@ -121,6 +121,12 @@ namespace NeuroSpectator.PageModels
         [ObservableProperty]
         private bool isCheckingDevice = false;
 
+        [ObservableProperty]
+        private bool isStartingStream = false;
+
+        [ObservableProperty]
+        private string startStreamButtonText = "Start Stream";
+
         // Derived properties
         public bool NoDeviceConnected => !IsDeviceConnected;
 
@@ -230,7 +236,7 @@ namespace NeuroSpectator.PageModels
         {
             try
             {
-                Debug.WriteLine("StreamerPage: Initializing device connection");
+                //Debug.WriteLine("StreamerPage: Initializing device connection");
 
                 // Check if there's already a connected device
                 if (deviceManager.CurrentDevice != null && deviceManager.CurrentDevice.IsConnected)
@@ -239,7 +245,7 @@ namespace NeuroSpectator.PageModels
                         IsDeviceConnected = true;
                         ConnectedDeviceName = deviceManager.CurrentDevice.Name ?? "Unknown Device";
                         DeviceStatusMessage = $"Connected to {ConnectedDeviceName}";
-                        Debug.WriteLine($"StreamerPage: Found connected device: {ConnectedDeviceName}");
+                        //Debug.WriteLine($"StreamerPage: Found connected device: {ConnectedDeviceName}");
                     });
 
                     // Set up event handlers for the connected device
@@ -260,7 +266,7 @@ namespace NeuroSpectator.PageModels
                             IsDeviceConnected = true;
                             ConnectedDeviceName = statusInfo.DeviceName ?? "Unknown Device";
                             DeviceStatusMessage = $"Connected to {ConnectedDeviceName}";
-                            Debug.WriteLine($"StreamerPage: Found connected device via connection manager: {ConnectedDeviceName}");
+                            //Debug.WriteLine($"StreamerPage: Found connected device via connection manager: {ConnectedDeviceName}");
                         });
                     }
                     else
@@ -269,7 +275,7 @@ namespace NeuroSpectator.PageModels
                             IsDeviceConnected = false;
                             ConnectedDeviceName = "No Device";
                             DeviceStatusMessage = "No BCI device connected";
-                            Debug.WriteLine("StreamerPage: No connected device found");
+                            //Debug.WriteLine("StreamerPage: No connected device found");
                         });
                     }
                 }
@@ -279,7 +285,7 @@ namespace NeuroSpectator.PageModels
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"StreamerPage: Error initializing device connection: {ex.Message}");
+                //Debug.WriteLine($"StreamerPage: Error initializing device connection: {ex.Message}");
                 StatusMessage = $"Error checking device: {ex.Message}";
             }
         }
@@ -305,16 +311,16 @@ namespace NeuroSpectator.PageModels
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"StreamerPage: Error in device check timer: {ex.Message}");
+                        //Debug.WriteLine($"StreamerPage: Error in device check timer: {ex.Message}");
                     }
                 };
                 deviceCheckTimer.Start();
 
-                Debug.WriteLine("StreamerPage: Started device check timer");
+                //Debug.WriteLine("StreamerPage: Started device check timer");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"StreamerPage: Error starting device check timer: {ex.Message}");
+                //Debug.WriteLine($"StreamerPage: Error starting device check timer: {ex.Message}");
             }
         }
 
@@ -327,7 +333,20 @@ namespace NeuroSpectator.PageModels
             {
                 deviceCheckTimer.Stop();
                 deviceCheckTimer = null;
-                Debug.WriteLine("StreamerPage: Stopped device check timer");
+                //Debug.WriteLine("StreamerPage: Stopped device check timer");
+            }
+        }
+
+        // Helper method to update start stream button text based on state
+        private void UpdateStartStreamButtonText(string status)
+        {
+            if (IsStartingStream)
+            {
+                StartStreamButtonText = status;
+            }
+            else
+            {
+                StartStreamButtonText = "Start Stream";
             }
         }
 
@@ -342,7 +361,7 @@ namespace NeuroSpectator.PageModels
             try
             {
                 IsCheckingDevice = true;
-                Debug.WriteLine("StreamerPage: Refreshing device connection status");
+                //Debug.WriteLine("StreamerPage: Refreshing device connection status");
 
                 bool wasConnected = IsDeviceConnected;
                 bool deviceFound = false;
@@ -357,7 +376,7 @@ namespace NeuroSpectator.PageModels
                         ConnectedDeviceName = statusInfo.DeviceName ?? "Unknown Device";
                         DeviceStatusMessage = $"Connected to {ConnectedDeviceName}";
                         deviceFound = true;
-                        Debug.WriteLine($"StreamerPage: Connected device found via connection manager: {ConnectedDeviceName}");
+                        //Debug.WriteLine($"StreamerPage: Connected device found via connection manager: {ConnectedDeviceName}");
 
                         // If connection manager knows about the device but deviceManager doesn't,
                         // there could be a sync issue - find the device in deviceManager
@@ -368,7 +387,7 @@ namespace NeuroSpectator.PageModels
                             {
                                 if (deviceInfo.Name == ConnectedDeviceName)
                                 {
-                                    Debug.WriteLine($"StreamerPage: Found matching device in deviceManager's available devices");
+                                    //Debug.WriteLine($"StreamerPage: Found matching device in deviceManager's available devices");
                                     // Don't connect here, as that could cause recursive issues
                                     break;
                                 }
@@ -391,7 +410,7 @@ namespace NeuroSpectator.PageModels
                         // Update device info
                         await UpdateDeviceInfoAsync(deviceManager.CurrentDevice);
 
-                        Debug.WriteLine($"StreamerPage: Connected device found in deviceManager: {ConnectedDeviceName}");
+                        //Debug.WriteLine($"StreamerPage: Connected device found in deviceManager: {ConnectedDeviceName}");
 
                         // IMPORTANT: Register with connection manager if not already done
                         if (connectionManager != null)
@@ -411,7 +430,7 @@ namespace NeuroSpectator.PageModels
                     DeviceBatteryLevel = 0;
                     DeviceSignalQuality = 0;
 
-                    Debug.WriteLine("StreamerPage: No connected device found");
+                    //Debug.WriteLine("StreamerPage: No connected device found");
                 }
 
                 // Update status message
@@ -430,7 +449,7 @@ namespace NeuroSpectator.PageModels
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"StreamerPage: Error refreshing device status: {ex.Message}");
+                //Debug.WriteLine($"StreamerPage: Error refreshing device status: {ex.Message}");
                 StatusMessage = $"Error checking device: {ex.Message}";
             }
             finally
@@ -454,11 +473,11 @@ namespace NeuroSpectator.PageModels
                 {
                     double batteryLevel = await device.GetBatteryLevelAsync();
                     DeviceBatteryLevel = batteryLevel;
-                    Debug.WriteLine($"StreamerPage: Device battery level: {batteryLevel}%");
+                    //Debug.WriteLine($"StreamerPage: Device battery level: {batteryLevel}%");
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"StreamerPage: Error getting battery level: {ex.Message}");
+                    //Debug.WriteLine($"StreamerPage: Error getting battery level: {ex.Message}");
                 }
 
                 // Get signal quality if available
@@ -466,11 +485,11 @@ namespace NeuroSpectator.PageModels
                 {
                     double signalQuality = await device.GetSignalQualityAsync();
                     DeviceSignalQuality = signalQuality;
-                    Debug.WriteLine($"StreamerPage: Device signal quality: {signalQuality:P0}");
+                    //Debug.WriteLine($"StreamerPage: Device signal quality: {signalQuality:P0}");
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"StreamerPage: Error getting signal quality: {ex.Message}");
+                    //Debug.WriteLine($"StreamerPage: Error getting signal quality: {ex.Message}");
                 }
 
                 // Update status message with battery info
@@ -478,7 +497,7 @@ namespace NeuroSpectator.PageModels
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"StreamerPage: Error updating device info: {ex.Message}");
+                //Debug.WriteLine($"StreamerPage: Error updating device info: {ex.Message}");
             }
         }
 
@@ -1005,17 +1024,23 @@ namespace NeuroSpectator.PageModels
         /// </summary>
         private async Task StartStreamAsync()
         {
-            if (IsLive)
+            // Prevent multiple attempts while already processing
+            if (IsLive || IsStartingStream)
                 return;
 
             try
             {
-                StatusMessage = "Starting stream...";
+                // Update UI to show starting state
+                IsStartingStream = true;
+                StatusMessage = "Preparing to start stream...";
+                UpdateStartStreamButtonText("Starting...");
 
                 // Check if OBS is connected
                 if (!obsService.IsConnected)
                 {
                     StatusMessage = "OBS is not connected";
+                    IsStartingStream = false;
+                    UpdateStartStreamButtonText("Start Failed");
                     return;
                 }
 
@@ -1024,13 +1049,34 @@ namespace NeuroSpectator.PageModels
                 if (!IsDeviceConnected)
                 {
                     StatusMessage = "No BCI device connected";
+                    IsStartingStream = false;
+                    UpdateStartStreamButtonText("Start Failed");
                     return;
                 }
 
                 // Create a new stream in MK.IO
                 try
                 {
+                    // MANDATORY FIRST STEP: Reset the streaming service - this is critical to success
+                    StatusMessage = "Resetting streaming service...";
+                    UpdateStartStreamButtonText("Resetting...");
+
+                    try
+                    {
+                        await streamingService.ResetStatusAsync();
+                        // Add a larger delay to ensure reset has fully taken effect
+                        await Task.Delay(2000);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log but continue - we'll try anyway
+                        Debug.WriteLine($"Error resetting streaming service: {ex.Message}");
+                    }
+
                     // Use the current title and game as the stream details
+                    StatusMessage = "Creating stream on MK.IO...";
+                    UpdateStartStreamButtonText("Creating Stream...");
+
                     var stream = await streamingService.CreateStreamAsync(
                         StreamTitle,
                         $"NeuroSpectator stream with brain data visualization for {GameCategory}",
@@ -1041,20 +1087,135 @@ namespace NeuroSpectator.PageModels
                     // Update the UI with the stream information
                     if (stream != null)
                     {
-                        // Display the ingest URL and stream key for OBS setup
+                        // Verify we have the necessary information
+                        if (string.IsNullOrEmpty(stream.IngestUrl) || string.IsNullOrEmpty(stream.StreamKey))
+                        {
+                            StatusMessage = "Error: Missing stream URL or key";
+                            IsStartingStream = false;
+                            UpdateStartStreamButtonText("Start Failed");
+                            return;
+                        }
+
+                        // Show stream details
+                        StatusMessage = "Stream created successfully!";
+
+                        // Configure OBS with the streaming settings
+                        StatusMessage = "Configuring OBS stream settings...";
+                        UpdateStartStreamButtonText("Configuring OBS...");
+                        await obsService.SetStreamSettingsAsync(stream.IngestUrl, stream.StreamKey);
+
+                        // Start the MK.IO live event
+                        StatusMessage = "Starting MK.IO live event...";
+                        UpdateStartStreamButtonText("Starting MK.IO...");
+
+                        // IMPORTANT: Make sure to start the MK.IO stream first
+                        await streamingService.StartStreamingAsync(stream.Id);
+
+                        // Show information to user while waiting for event to start
                         await Shell.Current.DisplayAlert(
-                            "Stream Created",
-                            $"Stream created successfully!\n\n" +
-                            $"OBS Stream Settings:\n" +
-                            $"Service: Custom\n" +
-                            $"Server: {stream.IngestUrl}\n" +
-                            $"Stream Key: {stream.StreamKey}\n\n" +
-                            "Please configure OBS with these settings.",
+                            "Live Event Created",
+                            $"RTMP Stream has been created!\n\nServer: {stream.IngestUrl}\nStream Key: {stream.StreamKey}\n\nWaiting for the live event to start...",
                             "OK"
                         );
 
-                        // Start the stream in MK.IO
-                        await streamingService.StartStreamingAsync(stream.Id);
+                        // Wait for the live event to become active
+                        StatusMessage = "Waiting for live event to become active...";
+                        UpdateStartStreamButtonText("Waiting for Live...");
+
+                        bool isLiveEventRunning = false;
+                        int retryCount = 0;
+                        // Use longer polling intervals and more retries
+                        // Check every 10 seconds for up to 2 minutes (12 retries)
+                        const int checkIntervalMs = 10000; // 10 seconds
+                        const int maxRetries = 12; // 2 minutes total
+
+                        // Create progress indicator in status message
+                        var progressTimer = new System.Timers.Timer(500); // Update every 500ms
+                        int dots = 0;
+
+                        progressTimer.Elapsed += (s, e) => {
+                            dots = (dots + 1) % 4; // Cycle through 0-3 dots
+                            MainThread.BeginInvokeOnMainThread(() => {
+                                StatusMessage = $"Waiting for live event to become active{new string('.', dots)}";
+                                UpdateStartStreamButtonText($"Waiting{new string('.', dots)}");
+                            });
+                        };
+
+                        progressTimer.Start();
+
+                        try
+                        {
+                            while (!isLiveEventRunning && retryCount < maxRetries)
+                            {
+                                // Poll the live event status
+                                try
+                                {
+                                    var updatedStream = await streamingService.GetStreamAsync(stream.Id);
+                                    isLiveEventRunning = updatedStream.IsLive;
+
+                                    if (isLiveEventRunning)
+                                    {
+                                        Debug.WriteLine("Live event is now active!");
+                                        break;
+                                    }
+                                    else
+                                    {
+                                        Debug.WriteLine($"Live event check #{retryCount + 1}: Not active yet");
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Debug.WriteLine($"Error checking live event status: {ex.Message}");
+                                    // Continue trying despite error
+                                }
+
+                                // Wait 10 seconds before checking again
+                                await Task.Delay(checkIntervalMs);
+                                retryCount++;
+                            }
+                        }
+                        finally
+                        {
+                            progressTimer.Stop();
+                            progressTimer.Dispose();
+                        }
+
+                        if (!isLiveEventRunning)
+                        {
+                            StatusMessage = "Live event failed to start within timeout period";
+                            IsStartingStream = false;
+                            UpdateStartStreamButtonText("Start Failed");
+
+                            // Roll back - stop the stream that couldn't fully start
+                            try
+                            {
+                                await streamingService.StopStreamingAsync(stream.Id);
+                            }
+                            catch (Exception ex)
+                            {
+                                Debug.WriteLine($"Error stopping failed stream: {ex.Message}");
+                            }
+
+                            // Reset the streaming service again
+                            await streamingService.ResetStatusAsync();
+
+                            return;
+                        }
+
+                        // Live event is now running - start the OBS stream
+                        StatusMessage = "Live event is active! Starting OBS streaming...";
+                        UpdateStartStreamButtonText("Starting OBS...");
+
+                        try
+                        {
+                            await obsService.StartStreamingAsync();
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"Error starting OBS stream: {ex.Message}");
+                            StatusMessage = $"Error starting OBS stream: {ex.Message}";
+                            // Continue anyway - the MK.IO stream is running
+                        }
 
                         // Create the BrainDataOBSHelper now that we have a connected device
                         try
@@ -1075,13 +1236,13 @@ namespace NeuroSpectator.PageModels
                             else
                             {
                                 StatusMessage = "Failed to initialize brain data helper";
-                                return;
+                                // Continue anyway - this isn't critical to the stream
                             }
                         }
                         catch (Exception ex)
                         {
                             StatusMessage = $"Error initializing brain data: {ex.Message}";
-                            return;
+                            // Continue anyway - this isn't critical to the stream
                         }
 
                         // Start the stream timer
@@ -1090,23 +1251,56 @@ namespace NeuroSpectator.PageModels
                         UpdateStreamTimeDisplay();
 
                         // Set status
-                        StatusMessage = "Stream started";
+                        StatusMessage = "Stream started successfully";
                         IsLive = true;
+
+                        // Show a success message
+                        await Shell.Current.DisplayAlert(
+                            "Stream Started",
+                            "Your stream has been started successfully!",
+                            "OK"
+                        );
                     }
                     else
                     {
                         StatusMessage = "Failed to create stream";
+                        UpdateStartStreamButtonText("Start Failed");
                     }
                 }
                 catch (Exception ex)
                 {
                     StatusMessage = $"Error creating MK.IO stream: {ex.Message}";
-                    return;
+                    UpdateStartStreamButtonText("Start Failed");
+
+                    // Try to reset the streaming service
+                    try
+                    {
+                        await streamingService.ResetStatusAsync();
+                    }
+                    catch
+                    {
+                        // Ignore errors during cleanup
+                    }
                 }
             }
             catch (Exception ex)
             {
                 StatusMessage = $"Error starting stream: {ex.Message}";
+                UpdateStartStreamButtonText("Start Failed");
+            }
+            finally
+            {
+                // Always reset the starting flag, but keep button text if there was an error
+                IsStartingStream = false;
+
+                // Schedule a reset of the button text after a delay if it shows an error
+                if (StartStreamButtonText.Contains("Failed"))
+                {
+                    MainThread.BeginInvokeOnMainThread(async () => {
+                        await Task.Delay(3000);
+                        UpdateStartStreamButtonText("Start Stream");
+                    });
+                }
             }
         }
 
@@ -1701,6 +1895,27 @@ namespace NeuroSpectator.PageModels
         {
             TimeSpan elapsed = DateTime.Now - streamStartTime;
             StreamTimeDisplay = $"{elapsed.Hours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}";
+        }
+
+        /// <summary>
+        /// Called when the StatusMessage property value changes
+        /// </summary>
+        partial void OnStatusMessageChanged(string value)
+        {
+            // When status message changes, optionally update button text too
+            if (IsStartingStream)
+            {
+                // Extract the main part before any dots
+                string basePart = value;
+                if (basePart.Contains("..."))
+                    basePart = basePart.Substring(0, basePart.IndexOf("..."));
+
+                // Keep it short for the button
+                if (basePart.Length > 15)
+                    basePart = basePart.Substring(0, 15) + "...";
+
+                UpdateStartStreamButtonText(basePart);
+            }
         }
         #endregion
     }

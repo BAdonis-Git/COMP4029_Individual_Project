@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -93,7 +94,7 @@ namespace NeuroSpectator.Services.Streaming
             mkioClient = new MKIOClient(mkioConfig.SubscriptionName, mkioConfig.ApiToken);
 
             // Log successful initialization
-            Console.WriteLine($"MKIOStreamingService: Initialized with subscription {mkioConfig.SubscriptionName}");
+            Debug.WriteLine($"MKIOStreamingService: Initialized with subscription {mkioConfig.SubscriptionName}");
         }
 
         /// <summary>
@@ -115,14 +116,31 @@ namespace NeuroSpectator.Services.Streaming
                     throw new InvalidOperationException("User must be signed in to create a stream");
                 }
 
+                // First ensure we're in a clean state
+                Debug.WriteLine("CreateStreamAsync: Ensuring clean state before creating stream");
+                await ResetStatusAsync();
+
+                // Add a delay to ensure reset is complete
+                await Task.Delay(3000);
+
+                // Double-check status after reset
+                if (Status != StreamingStatus.Idle)
+                {
+                    Debug.WriteLine($"CreateStreamAsync: Status is not Idle after reset! Current status: {Status}");
+                    // Force it to idle
+                    Status = StreamingStatus.Idle;
+                }
+
                 // Create a unique ID for this stream
                 string streamerId = currentUser.UserId ?? "anonymous";
 
-                // Set up status
-                Status = StreamingStatus.Starting;
+                // CRITICAL FIX: Do NOT set status to Starting here - leave it as Idle
+                // Let StartStreamingAsync handle the state transition
+                // This was causing the "Stream is already starting" error
 
                 // Create a live event in MK.IO
                 currentLiveEventName = mkioConfig.GenerateLiveEventName(streamerId);
+                Debug.WriteLine($"CreateStreamAsync: Creating live event: {currentLiveEventName}");
 
                 var location = await mkioClient.Account.GetSubscriptionLocationAsync();
 
@@ -141,8 +159,11 @@ namespace NeuroSpectator.Services.Streaming
                         Encoding = new LiveEventEncoding { EncodingType = LiveEventEncodingType.PassthroughBasic }
                     });
 
+                Debug.WriteLine($"CreateStreamAsync: Live event {currentLiveEventName} created successfully");
+
                 // Create an asset for the live output
                 currentAssetName = mkioConfig.GenerateOutputAssetName(streamerId);
+                Debug.WriteLine($"CreateStreamAsync: Creating asset {currentAssetName}");
 
                 // Create the asset with deletion policy set to Delete
                 await mkioClient.Assets.CreateOrUpdateAsync(
@@ -153,10 +174,15 @@ namespace NeuroSpectator.Services.Streaming
                     AssetContainerDeletionPolicyType.Delete
                 );
 
-                Console.WriteLine($"Asset '{currentAssetName}' created for live output");
+                Debug.WriteLine($"CreateStreamAsync: Asset '{currentAssetName}' created for live output");
+
+                // Wait a moment to ensure the asset is fully created
+                await Task.Delay(2000);
 
                 // Create a live output
                 currentLiveOutputName = $"output-{streamerId}-{DateTime.UtcNow:yyyyMMddHHmmss}";
+                Debug.WriteLine($"CreateStreamAsync: Creating live output {currentLiveOutputName}");
+
                 var liveOutput = await mkioClient.LiveOutputs.CreateAsync(
                     currentLiveEventName,
                     currentLiveOutputName,
@@ -166,8 +192,15 @@ namespace NeuroSpectator.Services.Streaming
                         AssetName = currentAssetName
                     });
 
+                Debug.WriteLine($"CreateStreamAsync: Live output {currentLiveOutputName} created successfully");
+
+                // Wait a moment to ensure the live output is fully created
+                await Task.Delay(2000);
+
                 // Create a streaming locator for clear streaming
                 currentLocatorName = mkioConfig.GenerateLocatorName(streamerId);
+                Debug.WriteLine($"CreateStreamAsync: Creating streaming locator {currentLocatorName}");
+
                 var locator = await mkioClient.StreamingLocators.CreateAsync(
                     currentLocatorName,
                     new StreamingLocatorProperties
@@ -175,6 +208,11 @@ namespace NeuroSpectator.Services.Streaming
                         AssetName = currentAssetName,
                         StreamingPolicyName = PredefinedStreamingPolicy.ClearStreamingOnly
                     });
+
+                Debug.WriteLine($"CreateStreamAsync: Streaming locator {currentLocatorName} created successfully");
+
+                // Wait a moment for the locator to be fully created before trying to get the URLs
+                await Task.Delay(3000);
 
                 // Ensure we have a streaming endpoint
                 await EnsureStreamingEndpointAvailableAsync();
@@ -201,15 +239,22 @@ namespace NeuroSpectator.Services.Streaming
                     HasBrainData = true
                 };
 
+                Debug.WriteLine($"CreateStreamAsync: Stream object created with ID {currentStream.Id}");
+
                 // Set the playback URL based on the streaming locator
+                // This might fail, but we're handling that in the method
                 await UpdatePlaybackUrlAsync();
+
+                // Ensure we're still in Idle state before returning
+                Debug.WriteLine("CreateStreamAsync: Ensuring Idle state before returning");
+                Status = StreamingStatus.Idle;
 
                 return currentStream;
             }
             catch (Exception ex)
             {
                 Status = StreamingStatus.Error;
-                Console.WriteLine($"Error creating stream: {ex.Message}");
+                Debug.WriteLine($"Error creating stream: {ex.Message}");
                 StreamingError?.Invoke(this, ex);
                 throw;
             }
@@ -253,7 +298,7 @@ namespace NeuroSpectator.Services.Streaming
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error updating stream: {ex.Message}");
+                Debug.WriteLine($"Error updating stream: {ex.Message}");
                 StreamingError?.Invoke(this, ex);
                 throw;
             }
@@ -269,24 +314,69 @@ namespace NeuroSpectator.Services.Streaming
                 throw new InvalidOperationException("No internet connection available");
             }
 
-            if (Status == StreamingStatus.Streaming || Status == StreamingStatus.Starting)
-            {
-                throw new InvalidOperationException("Already streaming or starting a stream");
-            }
-
             try
             {
+                // This is where the issue is - we need to make sure status is properly reset
+                // and check it more carefully
+
+                // First, check if we're already in the streaming or starting state
+                if (Status == StreamingStatus.Streaming)
+                {
+                    throw new InvalidOperationException("A stream is already in progress");
+                }
+
+                if (Status == StreamingStatus.Starting)
+                {
+                    // If we're already in Starting state but it's for a different stream,
+                    // we should reset first
+                    if (currentStream?.Id != streamId)
+                    {
+                        Debug.WriteLine($"StartStreamingAsync: Already in Starting state but for a different stream. Resetting first.");
+                        // Force reset status before trying to start new stream
+                        await ResetStatusAsync();
+                        // Add a delay to ensure reset completes
+                        await Task.Delay(2000);
+                    }
+                    else
+                    {
+                        Debug.WriteLine($"StartStreamingAsync: Stream {streamId} is already starting.");
+                        throw new InvalidOperationException("Stream is already starting");
+                    }
+                }
+
+                Debug.WriteLine($"StartStreamingAsync: Starting stream {streamId}");
+
+                // Now we can update status to Starting
                 Status = StreamingStatus.Starting;
 
                 // Check if this is the current stream
                 if (currentStream == null || currentStream.Id != streamId)
                 {
+                    Debug.WriteLine($"StartStreamingAsync: Cannot start stream {streamId} - not current stream");
                     throw new InvalidOperationException("Cannot start a stream that was not created with CreateStreamAsync");
                 }
 
                 // Start the live event
-                Console.WriteLine($"Starting live event: {currentLiveEventName}");
-                await mkioClient.LiveEvents.StartAsync(currentLiveEventName);
+                Debug.WriteLine($"StartStreamingAsync: Starting live event: {currentLiveEventName}");
+                try
+                {
+                    await mkioClient.LiveEvents.StartAsync(currentLiveEventName);
+                    Debug.WriteLine("StartStreamingAsync: Successfully sent StartAsync command to MK.IO");
+                }
+                catch (Exception ex)
+                {
+                    // If we get an error about the stream already running, this is actually okay
+                    if (ex.Message.Contains("already running") || ex.Message.Contains("already started"))
+                    {
+                        Debug.WriteLine("StartStreamingAsync: Live event appears to be already running - continuing");
+                    }
+                    else
+                    {
+                        Debug.WriteLine($"StartStreamingAsync: Error starting live event: {ex.Message}");
+                        // For other errors, rethrow
+                        throw;
+                    }
+                }
 
                 // Create a new cancellation token source for this streaming session
                 streamingCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -299,12 +389,13 @@ namespace NeuroSpectator.Services.Streaming
                 StartStatisticsPolling();
 
                 Status = StreamingStatus.Streaming;
+                Debug.WriteLine($"StartStreamingAsync: Stream {streamId} started successfully");
                 return true;
             }
             catch (Exception ex)
             {
                 Status = StreamingStatus.Error;
-                Console.WriteLine($"Error starting stream: {ex.Message}");
+                Debug.WriteLine($"StartStreamingAsync: Error starting stream: {ex.Message}");
                 StreamingError?.Invoke(this, ex);
                 throw;
             }
@@ -336,7 +427,7 @@ namespace NeuroSpectator.Services.Streaming
                 // First delete the live output to ensure the asset is finalized
                 if (!string.IsNullOrEmpty(currentLiveOutputName))
                 {
-                    Console.WriteLine($"Deleting live output: {currentLiveOutputName}");
+                    Debug.WriteLine($"Deleting live output: {currentLiveOutputName}");
                     await mkioClient.LiveOutputs.DeleteAsync(currentLiveEventName, currentLiveOutputName);
                     currentLiveOutputName = null;
                 }
@@ -344,7 +435,7 @@ namespace NeuroSpectator.Services.Streaming
                 // Then stop the live event
                 if (!string.IsNullOrEmpty(currentLiveEventName))
                 {
-                    Console.WriteLine($"Stopping live event: {currentLiveEventName}");
+                    Debug.WriteLine($"Stopping live event: {currentLiveEventName}");
                     await mkioClient.LiveEvents.StopAsync(currentLiveEventName);
                 }
 
@@ -359,7 +450,7 @@ namespace NeuroSpectator.Services.Streaming
             catch (Exception ex)
             {
                 Status = StreamingStatus.Error;
-                Console.WriteLine($"Error stopping stream: {ex.Message}");
+                Debug.WriteLine($"Error stopping stream: {ex.Message}");
                 StreamingError?.Invoke(this, ex);
                 throw;
             }
@@ -419,7 +510,7 @@ namespace NeuroSpectator.Services.Streaming
                     AssetContainerDeletionPolicyType.Delete
                 );
 
-                Console.WriteLine($"VOD asset '{mp4AssetName}' created");
+                Debug.WriteLine($"VOD asset '{mp4AssetName}' created");
 
                 // Create or update the converter transform
                 string transformName = MKIOConfig.CopyAllBitrateTransformName;
@@ -476,7 +567,7 @@ namespace NeuroSpectator.Services.Streaming
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error creating VOD: {ex.Message}");
+                Debug.WriteLine($"Error creating VOD: {ex.Message}");
                 StreamingError?.Invoke(this, ex);
                 throw;
             }
@@ -565,7 +656,7 @@ namespace NeuroSpectator.Services.Streaming
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"Error getting asset for live output {liveOutput.Name}: {ex.Message}");
+                            Debug.WriteLine($"Error getting asset for live output {liveOutput.Name}: {ex.Message}");
                             // Continue to the next live output
                         }
                     }
@@ -575,7 +666,7 @@ namespace NeuroSpectator.Services.Streaming
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting available streams: {ex.Message}");
+                Debug.WriteLine($"Error getting available streams: {ex.Message}");
                 StreamingError?.Invoke(this, ex);
                 throw;
             }
@@ -700,7 +791,7 @@ namespace NeuroSpectator.Services.Streaming
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting stream: {ex.Message}");
+                Debug.WriteLine($"Error getting stream: {ex.Message}");
                 StreamingError?.Invoke(this, ex);
                 throw;
             }
@@ -792,7 +883,7 @@ namespace NeuroSpectator.Services.Streaming
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting available VODs: {ex.Message}");
+                Debug.WriteLine($"Error getting available VODs: {ex.Message}");
                 StreamingError?.Invoke(this, ex);
                 throw;
             }
@@ -866,7 +957,7 @@ namespace NeuroSpectator.Services.Streaming
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error uploading thumbnail: {ex.Message}");
+                Debug.WriteLine($"Error uploading thumbnail: {ex.Message}");
                 StreamingError?.Invoke(this, ex);
                 throw;
             }
@@ -899,7 +990,7 @@ namespace NeuroSpectator.Services.Streaming
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error generating thumbnail: {ex.Message}");
+                Debug.WriteLine($"Error generating thumbnail: {ex.Message}");
                 StreamingError?.Invoke(this, ex);
                 throw;
             }
@@ -919,25 +1010,48 @@ namespace NeuroSpectator.Services.Streaming
                     return;
                 }
 
-                // Get the playback URLs
-                var paths = await mkioClient.StreamingLocators.ListUrlPathsAsync(currentLocatorName);
-                var streamingEndpoints = await mkioClient.StreamingEndpoints.ListAsync();
+                Debug.WriteLine($"Attempting to update playback URL for locator: {currentLocatorName}");
 
-                if (streamingEndpoints.Any() && paths.StreamingPaths.Any())
+                // Add a delay to give time for the container to be fully created
+                await Task.Delay(5000);  // 5 second delay
+
+                try
                 {
-                    // Find the first suitable path
-                    var path = paths.StreamingPaths.FirstOrDefault();
+                    // Get the playback URLs
+                    var paths = await mkioClient.StreamingLocators.ListUrlPathsAsync(currentLocatorName);
+                    var streamingEndpoints = await mkioClient.StreamingEndpoints.ListAsync();
 
-                    if (path != null && path.Paths.Any())
+                    if (streamingEndpoints.Any() && paths.StreamingPaths.Any())
                     {
-                        var endpoint = streamingEndpoints.First();
-                        currentStream.PlaybackUrl = $"https://{endpoint.Properties.HostName}{path.Paths.First()}";
+                        // Find the first suitable path
+                        var path = paths.StreamingPaths.FirstOrDefault();
+
+                        if (path != null && path.Paths.Any())
+                        {
+                            var endpoint = streamingEndpoints.First();
+                            currentStream.PlaybackUrl = $"https://{endpoint.Properties.HostName}{path.Paths.First()}";
+                            Debug.WriteLine($"Playback URL updated: {currentStream.PlaybackUrl}");
+                        }
+                        else
+                        {
+                            Debug.WriteLine("No streaming paths found in the response");
+                        }
                     }
+                    else
+                    {
+                        Debug.WriteLine("No streaming endpoints or paths available");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Instead of throwing, just log the error and continue
+                    Debug.WriteLine($"Non-critical error updating playback URL: {ex.Message}");
+                    // Don't rethrow - the playback URL is not critical for starting the stream
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error updating playback URL: {ex.Message}");
+                Debug.WriteLine($"Error in UpdatePlaybackUrlAsync: {ex.Message}");
                 // Don't throw here - just log the error
             }
         }
@@ -967,7 +1081,7 @@ namespace NeuroSpectator.Services.Streaming
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error setting playback URL: {ex.Message}");
+                Debug.WriteLine($"Error setting playback URL: {ex.Message}");
                 // Don't throw here - just log the error
             }
         }
@@ -997,7 +1111,7 @@ namespace NeuroSpectator.Services.Streaming
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error setting VOD playback URL: {ex.Message}");
+                Debug.WriteLine($"Error setting VOD playback URL: {ex.Message}");
                 // Don't throw here - just log the error
             }
         }
@@ -1020,7 +1134,7 @@ namespace NeuroSpectator.Services.Streaming
                     // If the endpoint is not running, start it
                     if (endpoint.Properties.ResourceState != StreamingEndpointResourceState.Running)
                     {
-                        Console.WriteLine($"Starting streaming endpoint '{endpoint.Name}'");
+                        Debug.WriteLine($"Starting streaming endpoint '{endpoint.Name}'");
                         await mkioClient.StreamingEndpoints.StartAsync(endpoint.Name);
                     }
                 }
@@ -1044,7 +1158,7 @@ namespace NeuroSpectator.Services.Streaming
                         );
 
                         currentStreamingEndpointName = endpoint.Name;
-                        Console.WriteLine($"Streaming endpoint '{endpoint.Name}' created and started");
+                        Debug.WriteLine($"Streaming endpoint '{endpoint.Name}' created and started");
                     }
                     else
                     {
@@ -1054,7 +1168,7 @@ namespace NeuroSpectator.Services.Streaming
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error ensuring streaming endpoint: {ex.Message}");
+                Debug.WriteLine($"Error ensuring streaming endpoint: {ex.Message}");
                 throw;
             }
         }
@@ -1082,12 +1196,12 @@ namespace NeuroSpectator.Services.Streaming
                     }
                 );
 
-                Console.WriteLine($"Transform '{transform.Name}' created/updated");
+                Debug.WriteLine($"Transform '{transform.Name}' created/updated");
                 return transform;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error creating/updating transform: {ex.Message}");
+                Debug.WriteLine($"Error creating/updating transform: {ex.Message}");
                 throw;
             }
         }
@@ -1120,12 +1234,12 @@ namespace NeuroSpectator.Services.Streaming
                     }
                 );
 
-                Console.WriteLine($"Job '{job.Name}' submitted");
+                Debug.WriteLine($"Job '{job.Name}' submitted");
                 return job;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error submitting job: {ex.Message}");
+                Debug.WriteLine($"Error submitting job: {ex.Message}");
                 throw;
             }
         }
@@ -1142,7 +1256,7 @@ namespace NeuroSpectator.Services.Streaming
             {
                 await Task.Delay(SleepIntervalMs);
                 job = await mkioClient.Jobs.GetAsync(transformName, jobName);
-                Console.WriteLine($"Job '{jobName}' state: {job.Properties.State}" +
+                Debug.WriteLine($"Job '{jobName}' state: {job.Properties.State}" +
                     (job.Properties.Outputs.First().Progress != null ?
                         $" Progress: {job.Properties.Outputs.First().Progress}%" :
                         string.Empty));
@@ -1216,7 +1330,7 @@ namespace NeuroSpectator.Services.Streaming
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error polling statistics: {ex.Message}");
+                Debug.WriteLine($"Error polling statistics: {ex.Message}");
                 // Don't raise error event for statistics issues
             }
         }
@@ -1253,6 +1367,94 @@ namespace NeuroSpectator.Services.Streaming
                 }
 
                 isDisposed = true;
+            }
+        }
+
+        /// <summary>
+        /// Resets the streaming service status to Idle
+        /// </summary>
+        public async Task ResetStatusAsync()
+        {
+            try
+            {
+                Debug.WriteLine("MKIOStreamingService: Beginning status reset");
+
+                // Stop statistics polling
+                StopStatisticsPolling();
+
+                // Cancel and dispose streaming token source
+                if (streamingCancellationSource != null)
+                {
+                    try
+                    {
+                        streamingCancellationSource.Cancel();
+                        streamingCancellationSource.Dispose();
+                    }
+                    catch (ObjectDisposedException) { /* Already disposed, ignore */ }
+                    streamingCancellationSource = null;
+                }
+
+                // Reset all state variables
+                currentLiveEventName = null;
+                currentLiveOutputName = null;
+                currentAssetName = null;
+                currentLocatorName = null;
+
+                // Reset stream state
+                if (currentStream != null)
+                {
+                    // Check if the stream is actually running and needs to be stopped
+                    if (currentStream.IsLive || Status == StreamingStatus.Streaming)
+                    {
+                        try
+                        {
+                            string id = currentStream.Id;
+                            Debug.WriteLine($"MKIOStreamingService: Stopping active stream {id}");
+
+                            // First set stream to not live to avoid recursive call issues
+                            currentStream.IsLive = false;
+
+                            try
+                            {
+                                // Directly access mkioClient to stop the live event without going through potentially recursive call
+                                if (!string.IsNullOrEmpty(currentLiveEventName))
+                                {
+                                    Debug.WriteLine($"MKIOStreamingService: Stopping live event {currentLiveEventName} directly");
+                                    await mkioClient.LiveEvents.StopAsync(currentLiveEventName);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Debug.WriteLine($"Error stopping live event directly: {ex.Message}");
+                                // Continue with reset even if stop fails
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"Error stopping existing stream during reset: {ex.Message}");
+                            // Continue with reset even if stop fails
+                        }
+                    }
+
+                    // Now nullify the stream
+                    currentStream = null;
+                }
+
+                // Wait a moment to ensure all async operations complete
+                await Task.Delay(1000);
+
+                // Finally, explicitly set status to Idle (this will trigger the StatusChanged event)
+                Debug.WriteLine("MKIOStreamingService: Setting status to Idle");
+                Status = StreamingStatus.Idle;
+
+                Debug.WriteLine("MKIOStreamingService: Status reset completed successfully");
+                await Task.CompletedTask; // For async consistency
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error in ResetStatusAsync: {ex.Message}");
+                // Even if there's an error, force status to Idle
+                Status = StreamingStatus.Idle;
             }
         }
     }
