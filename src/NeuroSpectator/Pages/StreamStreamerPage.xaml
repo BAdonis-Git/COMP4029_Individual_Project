@@ -129,7 +129,16 @@
                         Text="{Binding StartStreamButtonText}" 
                         Style="{StaticResource PrimaryButtonStyle}" 
                         HorizontalOptions="End" 
-                        Margin="0,5,0,0"/>
+                        Margin="0,5,0,0">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button"
+                                 Binding="{Binding IsStartingStream}"
+                                 Value="True">
+                                <Setter Property="BackgroundColor" Value="#7B61B1" />
+                                <!-- Dimmed purple -->
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
                     <!-- End Stream Button - should be visible when streaming -->
                     <Button IsVisible="{Binding IsLive}" 
                         Command="{Binding EndStreamCommand}" 

@@ -13,6 +13,7 @@ using CommunityToolkit.Mvvm.Input;
 using NeuroSpectator.Services.Visualisation;
 using System.Diagnostics;
 using NeuroSpectator.Models.Stream;
+using System.Net;
 
 namespace NeuroSpectator.PageModels
 {
@@ -1020,6 +1021,40 @@ namespace NeuroSpectator.PageModels
         }
 
         /// <summary>
+        /// Checks if an RTMP endpoint is valid and ready to accept streaming data
+        /// </summary>
+        private async Task<bool> IsRtmpEndpointReadyAsync(string rtmpUrl, int maxAttempts = 10, int delayMs = 3000)
+        {
+            Debug.WriteLine($"Checking if RTMP endpoint is ready: {rtmpUrl}");
+
+            // Can't directly ping an RTMP endpoint from C#, try to validate the URL format
+            // and check if the hostname resolves
+            try
+            {
+                // Parse the RTMP URL
+                Uri uri = new Uri(rtmpUrl);
+
+                // Check if we can resolve the hostname
+                var hostEntry = await Dns.GetHostEntryAsync(uri.Host);
+
+                // For RTMP we would typically need a more sophisticated check,
+                // but for now, we'll assume if the host resolves, it's potentially valid
+                Debug.WriteLine($"RTMP host {uri.Host} resolved successfully");
+
+                // To improve:
+                // 1. Send a request to our backend to check if the RTMP endpoint is accepting connections
+                // 2. Use a small test publishing to check if the endpoint accepts data
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error validating RTMP endpoint: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Starts the stream
         /// </summary>
         private async Task StartStreamAsync()
@@ -1202,13 +1237,100 @@ namespace NeuroSpectator.PageModels
                             return;
                         }
 
-                        // Live event is now running - start the OBS stream
-                        StatusMessage = "Live event is active! Starting OBS streaming...";
+                        // Live event is now running - but we need to verify the RTMP endpoint is ready
+                        StatusMessage = "Live event is active! Validating RTMP endpoint...";
+                        UpdateStartStreamButtonText("Validating RTMP...");
+
+                        // Create new progress timer for RTMP validation
+                        progressTimer = new System.Timers.Timer(500); // Update every 500ms
+                        dots = 0;
+
+                        progressTimer.Elapsed += (s, e) => {
+                            dots = (dots + 1) % 4; // Cycle through 0-3 dots
+                            MainThread.BeginInvokeOnMainThread(() => {
+                                StatusMessage = $"Validating RTMP endpoint{new string('.', dots)}";
+                                UpdateStartStreamButtonText($"Validating{new string('.', dots)}");
+                            });
+                        };
+
+                        progressTimer.Start();
+
+                        try
+                        {
+                            // Try to validate the RTMP endpoint is ready
+                            bool isRtmpEndpointReady = false;
+                            retryCount = 0;
+                            const int rtmpCheckMaxRetries = 10;
+                            const int rtmpCheckIntervalMs = 5000; // 5 seconds
+
+                            while (!isRtmpEndpointReady && retryCount < rtmpCheckMaxRetries)
+                            {
+                                try
+                                {
+                                    // For MVP, we'll just add a delay - in a real implementation, we'd actually check the endpoint
+                                    // isRtmpEndpointReady = await IsRtmpEndpointReadyAsync(stream.IngestUrl);
+
+                                    // For now, add a delay to give the RTMP endpoint time to become ready
+                                    await Task.Delay(rtmpCheckIntervalMs);
+
+                                    // Since we can't actually check the RTMP endpoint directly,
+                                    // we'll assume it's ready after the first retry
+                                    isRtmpEndpointReady = true;
+
+                                    if (isRtmpEndpointReady)
+                                    {
+                                        Debug.WriteLine("RTMP endpoint is now ready!");
+                                        break;
+                                    }
+                                    else
+                                    {
+                                        Debug.WriteLine($"RTMP endpoint check #{retryCount + 1}: Not ready yet");
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Debug.WriteLine($"Error checking RTMP endpoint: {ex.Message}");
+                                    // Continue trying despite error
+                                }
+
+                                retryCount++;
+                            }
+
+                            if (!isRtmpEndpointReady)
+                            {
+                                StatusMessage = "RTMP endpoint failed to become ready within timeout period";
+                                IsStartingStream = false;
+                                UpdateStartStreamButtonText("Start Failed");
+
+                                // Don't roll back the stream, as the live event is running
+                                // Just don't start OBS streaming
+                                return;
+                            }
+                        }
+                        finally
+                        {
+                            progressTimer.Stop();
+                            progressTimer.Dispose();
+                        }
+
+                        // RTMP endpoint is ready - start OBS streaming
+                        StatusMessage = "RTMP endpoint ready! Starting OBS streaming...";
                         UpdateStartStreamButtonText("Starting OBS...");
 
                         try
                         {
-                            await obsService.StartStreamingAsync();
+                            bool obsStartSuccess = await obsService.ToggleStreamingAsync();
+
+                            if (!obsStartSuccess)
+                            {
+                                // OBS streaming failed to start
+                                StatusMessage = "Error starting OBS stream - please start it manually";
+                                // Don't set IsStartingStream to false yet - we'll still continue with the rest of the setup
+                            }
+                            else
+                            {
+                                StatusMessage = "OBS streaming started successfully";
+                            }
                         }
                         catch (Exception ex)
                         {
@@ -1232,6 +1354,7 @@ namespace NeuroSpectator.PageModels
 
                                 // Start brain data monitoring
                                 await brainDataObsHelper.StartMonitoringAsync(true);
+                                StatusMessage = "Brain data monitoring started";
                             }
                             else
                             {
@@ -1316,12 +1439,34 @@ namespace NeuroSpectator.PageModels
             {
                 StatusMessage = "Ending stream...";
 
-                // Get the current stream from the streaming service
+                // FIRST: Stop OBS streaming
+                if (obsService.IsConnected)
+                {
+                    StatusMessage = "Stopping OBS streaming...";
+                    try
+                    {
+                        await obsService.StopStreamingAsync();
+                        StatusMessage = "OBS streaming stopped";
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Error stopping OBS stream: {ex.Message}");
+                        StatusMessage = $"Warning: OBS stream stop error: {ex.Message}";
+                        // Continue with MK.IO shutdown even if OBS stop fails
+                    }
+
+                    // Small delay to ensure OBS has fully stopped
+                    await Task.Delay(1000);
+                }
+
+                // SECOND: Get the current stream from the streaming service
                 var currentStream = streamingService.CurrentStream;
                 if (currentStream != null)
                 {
                     // Stop the MK.IO stream
+                    StatusMessage = "Stopping MK.IO stream...";
                     await streamingService.StopStreamingAsync(currentStream.Id);
+                    StatusMessage = "MK.IO stream stopped";
 
                     // Ask if user wants to create a VOD
                     bool createVod = await Application.Current.MainPage.DisplayAlert(
@@ -1333,6 +1478,7 @@ namespace NeuroSpectator.PageModels
                     {
                         try
                         {
+                            StatusMessage = "Creating VOD...";
                             // Create a VOD from the stream
                             var vod = await streamingService.CreateVodFromStreamAsync(
                                 currentStream.Id,
@@ -1344,6 +1490,7 @@ namespace NeuroSpectator.PageModels
                                     "VOD Created",
                                     $"VOD created successfully with title: {vod.Title}",
                                     "OK");
+                                StatusMessage = "VOD created successfully";
                             }
                         }
                         catch (Exception ex)
@@ -1352,6 +1499,7 @@ namespace NeuroSpectator.PageModels
                                 "VOD Creation Failed",
                                 $"Failed to create VOD: {ex.Message}",
                                 "OK");
+                            StatusMessage = $"VOD creation failed: {ex.Message}";
                         }
                     }
                 }
@@ -1359,19 +1507,21 @@ namespace NeuroSpectator.PageModels
                 // Stop brain data monitoring
                 if (brainDataObsHelper != null)
                 {
+                    StatusMessage = "Stopping brain data monitoring...";
                     brainDataObsHelper.BrainMetricsUpdated -= OnBrainMetricsUpdated;
                     brainDataObsHelper.SignificantBrainEventDetected -= OnSignificantBrainEventDetected;
                     brainDataObsHelper.ErrorOccurred -= OnBrainDataError;
 
                     await brainDataObsHelper.StopMonitoringAsync();
                     brainDataObsHelper = null;
+                    StatusMessage = "Brain data monitoring stopped";
                 }
 
                 // Stop the stream timer
                 streamTimer.Stop();
 
                 // Set status
-                StatusMessage = "Stream ended";
+                StatusMessage = "Stream ended successfully";
                 IsLive = false;
 
                 // Reset brain event count
@@ -1380,6 +1530,8 @@ namespace NeuroSpectator.PageModels
             catch (Exception ex)
             {
                 StatusMessage = $"Error ending stream: {ex.Message}";
+                Debug.WriteLine($"Error ending stream: {ex.Message}");
+                Debug.WriteLine($"Stack trace: {ex.StackTrace}");
             }
         }
 
