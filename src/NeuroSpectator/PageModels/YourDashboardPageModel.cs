@@ -66,6 +66,10 @@ namespace NeuroSpectator.PageModels
         [ObservableProperty]
         private bool isLoadingStreams = false;
 
+        [ObservableProperty]
+        private bool isRefreshingStreams = false;
+
+
 
         // Derived Properties
         public bool IsNotConnected => !IsConnected;
@@ -78,6 +82,7 @@ namespace NeuroSpectator.PageModels
         public ICommand ViewStreamCommand { get; }
         public ICommand ViewCategoryCommand { get; }
         public ICommand RefreshConnectionCommand { get; }
+        public ICommand RefreshStreamsCommand { get; }
 
         /// <summary>
         /// Creates a new instance of the YourDashboardPageModel class
@@ -93,6 +98,7 @@ namespace NeuroSpectator.PageModels
             ViewStreamCommand = new AsyncRelayCommand<StreamInfo>(ViewStreamAsync);
             ViewCategoryCommand = new AsyncRelayCommand<CategoryModel>(ViewCategoryAsync);
             RefreshConnectionCommand = new AsyncRelayCommand(RefreshConnectionStatusAsync);
+            RefreshStreamsCommand = new AsyncRelayCommand(LoadMkioStreamsAsync);
 
             // Subscribe to device manager events
             deviceManager.DeviceListChanged += OnDeviceListChanged;
@@ -204,7 +210,7 @@ namespace NeuroSpectator.PageModels
                 {
                     Debug.WriteLine("Dashboard: OnAppearingAsync - First initialization");
 
-                    // Check if a device is connected with comprehensive status refresh
+                    // Check device connection status
                     await RefreshConnectionStatusAsync();
 
                     // Start connection monitoring
@@ -280,11 +286,20 @@ namespace NeuroSpectator.PageModels
         }
 
         // Method to load MK.IO streams
+        // Update this method to handle the refreshing state
         private async Task LoadMkioStreamsAsync()
         {
             try
             {
+                IsRefreshingStreams = true;
                 IsLoadingStreams = true;
+
+                // Clear existing collections
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    FeaturedStreams.Clear();
+                    RecentVods.Clear();
+                });
 
                 // Get live streams
                 var liveStreams = await streamingService.GetAvailableStreamsAsync(true);
@@ -292,7 +307,6 @@ namespace NeuroSpectator.PageModels
                 // Update the featured streams collection on UI thread
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
-                    FeaturedStreams.Clear();
                     foreach (var stream in liveStreams.Take(5)) // Limit to 5 streams
                     {
                         FeaturedStreams.Add(stream);
@@ -305,28 +319,29 @@ namespace NeuroSpectator.PageModels
                 // Update the recent VODs collection on UI thread
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
-                    RecentVods.Clear();
                     foreach (var vod in vods.Take(5)) // Limit to 5 VODs
                     {
                         RecentVods.Add(vod);
                     }
                 });
 
-                // If no streams were found, load placeholder data
+                // If no streams were found, load placeholder data only if requested
                 if (FeaturedStreams.Count == 0 && RecentVods.Count == 0)
                 {
-                    LoadPlaceholderData();
+                    // Optional: load placeholder data or show "No streams available" message
+                    Debug.WriteLine("No streams or VODs found from MK.IO");
                 }
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"Error loading MK.IO streams: {ex.Message}");
-                // Fall back to placeholder data
-                LoadPlaceholderData();
+                // Show an error message to the user
+                await Shell.Current.DisplayAlert("Error", $"Failed to load streams: {ex.Message}", "OK");
             }
             finally
             {
                 IsLoadingStreams = false;
+                IsRefreshingStreams = false;
             }
         }
 
@@ -337,14 +352,13 @@ namespace NeuroSpectator.PageModels
 
             try
             {
+                Debug.WriteLine($"Opening stream: {stream.Id}, Title: {stream.Title}");
+
                 // Navigation parameters
-                var queryParameters = new Dictionary<string, object>
-        {
-            { "streamId", stream.Id }
-        };
+                var queryString = $"?streamId={Uri.EscapeDataString(stream.Id)}";
 
                 // Navigate to the stream viewer page with the stream ID
-                await Shell.Current.GoToAsync($"//StreamSpectatorPage?streamId={stream.Id}");
+                await Shell.Current.GoToAsync($"//StreamSpectatorPage{queryString}");
             }
             catch (Exception ex)
             {

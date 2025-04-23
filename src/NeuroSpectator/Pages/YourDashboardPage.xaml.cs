@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using Microsoft.Maui.Controls;
+using NeuroSpectator.Models.Stream;
 using NeuroSpectator.PageModels;
 
 namespace NeuroSpectator.Pages
@@ -46,6 +47,34 @@ namespace NeuroSpectator.Pages
             {
                 Debug.WriteLine($"Error in YourDashboardPage.OnAppearing: {ex.Message}");
                 Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+            }
+        }
+
+        protected void OnStreamSelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            try
+            {
+                if (e.CurrentSelection != null && e.CurrentSelection.Count > 0 && _viewModel != null)
+                {
+                    // Get the selected StreamInfo
+                    var streamInfo = e.CurrentSelection[0] as StreamInfo;
+
+                    // Execute the ViewStreamCommand
+                    if (_viewModel.ViewStreamCommand.CanExecute(streamInfo))
+                    {
+                        _viewModel.ViewStreamCommand.Execute(streamInfo);
+                    }
+
+                    // Clear selection to allow re-selecting the same item
+                    if (sender is CollectionView collectionView)
+                    {
+                        collectionView.SelectedItem = null;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error in OnStreamSelectionChanged: {ex.Message}");
             }
         }
     }

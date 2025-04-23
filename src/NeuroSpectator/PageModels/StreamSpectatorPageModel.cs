@@ -166,6 +166,9 @@ namespace NeuroSpectator.PageModels
         /// <summary>
         /// Gets the stream ID from navigation parameters
         /// </summary>
+        /// <summary>
+        /// Gets the stream ID from navigation parameters
+        /// </summary>
         private async Task<string> GetStreamIdFromNavigationAsync()
         {
             try
@@ -203,10 +206,8 @@ namespace NeuroSpectator.PageModels
                     }
                 }
 
-                // For debugging/testing - return a default ID
-                // In production, you might want to show an error or navigate back
-                Debug.WriteLine("No stream ID found - using default test stream");
-                return "default-stream-id";
+                // If we get here, no stream ID was found
+                return string.Empty;
             }
             catch (Exception ex)
             {
