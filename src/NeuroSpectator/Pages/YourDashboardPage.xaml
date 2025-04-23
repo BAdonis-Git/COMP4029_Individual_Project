@@ -4,6 +4,7 @@
              xmlns:pageModels="clr-namespace:NeuroSpectator.PageModels"
              xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
              xmlns:utilities="clr-namespace:NeuroSpectator.Utilities"
+             xmlns:stream="clr-namespace:NeuroSpectator.Models.Stream"
              x:Class="NeuroSpectator.Pages.YourDashboardPage"
              Title="Your Dashboard"
              BackgroundColor="#1E1E1E">
@@ -57,89 +58,83 @@
 
     <Grid Padding="10" RowDefinitions="*,*" ColumnDefinitions="2*,*">
         <!-- Featured Streams Panel -->
-        <Frame Grid.Row="0" Grid.Column="0" 
-               Style="{StaticResource CardStyle}">
-            <Grid RowDefinitions="Auto,*">
-                <Label Text="Featured Streams" 
-                       Style="{StaticResource HeaderLabelStyle}"/>
+        <Frame Grid.Row="0" Grid.Column="0" Style="{StaticResource CardStyle}">
+            <Grid RowDefinitions="Auto,Auto,*">
+                <Label Text="Featured Streams" Style="{StaticResource HeaderLabelStyle}"/>
 
-                <ScrollView Grid.Row="1" Orientation="Horizontal">
-                    <HorizontalStackLayout Spacing="15">
-                        <!-- Stream Card 1 -->
-                        <Grid WidthRequest="200" HeightRequest="170">
-                            <Frame Style="{StaticResource CardStyle}" BackgroundColor="#383838">
-                                <Grid RowDefinitions="Auto,*,Auto">
-                                    <Grid>
-                                        <Label Text="Streamer Name" TextColor="White" 
-                                               FontAttributes="Bold" FontSize="14"/>
-                                        <Label Text="Live" Style="{StaticResource LiveTagStyle}" />
-                                    </Grid>
+                <!-- Add refresh button -->
+                <Button Grid.Row="1" 
+                Text="Refresh" 
+                Command="{Binding RefreshStreamsCommand}" 
+                IsEnabled="{Binding IsRefreshingStreams, Converter={StaticResource ZeroConverter}}"
+                Style="{StaticResource ControlButtonStyle}"
+                HorizontalOptions="End"
+                Margin="0,0,0,10"/>
 
-                                    <Frame Grid.Row="1" Style="{StaticResource StreamPreviewStyle}">
-                                        <Label Text="Stream Preview" 
+                <!-- Loading indicator -->
+                <ActivityIndicator Grid.Row="1" 
+                           IsRunning="{Binding IsLoadingStreams}"
+                           IsVisible="{Binding IsLoadingStreams}"
+                           HorizontalOptions="Center" 
+                           VerticalOptions="Center" 
+                           Color="#B388FF"/>
+
+                <!-- Empty state message -->
+                <Label Grid.Row="2" 
+               Text="No live streams available" 
+               IsVisible="{Binding FeaturedStreams.Count, Converter={StaticResource ZeroConverter}}"
+               TextColor="#AAAAAA" 
+               HorizontalOptions="Center" 
+               VerticalOptions="Center"
+               IsEnabled="{Binding IsLoadingStreams, Converter={StaticResource ZeroConverter}}"/>
+
+                <!-- Stream Cards -->
+                <ScrollView Grid.Row="2" Orientation="Horizontal">
+                    <CollectionView ItemsSource="{Binding FeaturedStreams}" 
+                            SelectionMode="Single"
+                            SelectionChanged="OnStreamSelectionChanged">
+                        <CollectionView.ItemsLayout>
+                            <LinearItemsLayout Orientation="Horizontal" ItemSpacing="15"/>
+                        </CollectionView.ItemsLayout>
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="stream:StreamInfo">
+                                <Grid WidthRequest="200" HeightRequest="170">
+                                    <Frame Style="{StaticResource CardStyle}" BackgroundColor="#383838">
+                                        <Grid RowDefinitions="Auto,*,Auto">
+                                            <Grid>
+                                                <Label Text="{Binding StreamerName}" 
+                                               TextColor="White" 
+                                               FontAttributes="Bold" 
+                                               FontSize="14"/>
+                                                <Label Text="Live" 
+                                               Style="{StaticResource LiveTagStyle}" 
+                                               IsVisible="{Binding IsLive}"/>
+                                            </Grid>
+
+                                            <Frame Grid.Row="1" Style="{StaticResource StreamPreviewStyle}">
+                                                <Label Text="{Binding Title}" 
                                                HorizontalOptions="Center" 
                                                VerticalOptions="Center" 
-                                               TextColor="#AAAAAA"/>
-                                    </Frame>
+                                               TextColor="#AAAAAA"
+                                               LineBreakMode="TailTruncation"
+                                               MaxLines="2"/>
+                                            </Frame>
 
-                                    <Label Grid.Row="2" 
-                                           Text="Focus: 87% | Alpha: High" 
+                                            <Label Grid.Row="2" 
+                                           Text="{Binding Game}" 
                                            TextColor="#AAAAAA" 
                                            FontSize="12"/>
-                                </Grid>
-                            </Frame>
-                        </Grid>
-
-                        <!-- Stream Card 2 -->
-                        <Grid WidthRequest="200" HeightRequest="170">
-                            <Frame Style="{StaticResource CardStyle}" BackgroundColor="#383838">
-                                <Grid RowDefinitions="Auto,*,Auto">
-                                    <Grid>
-                                        <Label Text="Streamer Name" TextColor="White" 
-                                               FontAttributes="Bold" FontSize="14"/>
-                                        <Label Text="Live" Style="{StaticResource LiveTagStyle}" />
-                                    </Grid>
-
-                                    <Frame Grid.Row="1" Style="{StaticResource StreamPreviewStyle}">
-                                        <Label Text="Stream Preview" 
-                                               HorizontalOptions="Center" 
-                                               VerticalOptions="Center" 
-                                               TextColor="#AAAAAA"/>
+                                        </Grid>
                                     </Frame>
-
-                                    <Label Grid.Row="2" 
-                                           Text="Focus: 92% | Alpha: Medium" 
-                                           TextColor="#AAAAAA" 
-                                           FontSize="12"/>
+                                    <Grid.GestureRecognizers>
+                                        <TapGestureRecognizer 
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type pageModels:YourDashboardPageModel}}, Path=ViewStreamCommand}"
+                                    CommandParameter="{Binding .}" />
+                                    </Grid.GestureRecognizers>
                                 </Grid>
-                            </Frame>
-                        </Grid>
-
-                        <!-- Stream Card 3 -->
-                        <Grid WidthRequest="200" HeightRequest="170">
-                            <Frame Style="{StaticResource CardStyle}" BackgroundColor="#383838">
-                                <Grid RowDefinitions="Auto,*,Auto">
-                                    <Grid>
-                                        <Label Text="Streamer Name" TextColor="White" 
-                                               FontAttributes="Bold" FontSize="14"/>
-                                        <Label Text="Live" Style="{StaticResource LiveTagStyle}" />
-                                    </Grid>
-
-                                    <Frame Grid.Row="1" Style="{StaticResource StreamPreviewStyle}">
-                                        <Label Text="Stream Preview" 
-                                               HorizontalOptions="Center" 
-                                               VerticalOptions="Center" 
-                                               TextColor="#AAAAAA"/>
-                                    </Frame>
-
-                                    <Label Grid.Row="2" 
-                                           Text="Focus: 76% | Alpha: High" 
-                                           TextColor="#AAAAAA" 
-                                           FontSize="12"/>
-                                </Grid>
-                            </Frame>
-                        </Grid>
-                    </HorizontalStackLayout>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
                 </ScrollView>
             </Grid>
         </Frame>
@@ -227,83 +222,61 @@
             </Grid>
         </Frame>
 
-        <!-- Recent Activity Panel -->
+        <!-- Recent Activity Panel (now VODs) -->
         <Frame Grid.Row="1" Grid.Column="0" Style="{StaticResource CardStyle}">
             <Grid RowDefinitions="Auto,*">
-                <Label Text="Your Recent Activity" 
-                       Style="{StaticResource HeaderLabelStyle}"/>
+                <Label Text="Recent VODs" Style="{StaticResource HeaderLabelStyle}"/>
+
+                <!-- Empty state message -->
+                <Label Grid.Row="1" 
+               Text="No recent VODs available" 
+               IsVisible="{Binding RecentVods.Count, Converter={StaticResource ZeroConverter}}"
+               TextColor="#AAAAAA" 
+               HorizontalOptions="Center" 
+               VerticalOptions="Center"
+               IsEnabled="{Binding IsLoadingStreams, Converter={StaticResource ZeroConverter}}"/>
 
                 <ScrollView Grid.Row="1" Orientation="Horizontal">
-                    <HorizontalStackLayout Spacing="15">
-                        <!-- Recent Activity Card 1 (Live) -->
-                        <Grid WidthRequest="200" HeightRequest="170">
-                            <Frame Style="{StaticResource CardStyle}" BackgroundColor="#383838">
-                                <Grid RowDefinitions="Auto,*,Auto">
-                                    <Grid>
-                                        <Label Text="Streamer Name" TextColor="White" 
-                                               FontAttributes="Bold" FontSize="14"/>
-                                        <Label Text="Live" Style="{StaticResource LiveTagStyle}" />
-                                    </Grid>
+                    <CollectionView ItemsSource="{Binding RecentVods}" 
+                            SelectionMode="Single"
+                            SelectionChanged="OnStreamSelectionChanged">
+                        <CollectionView.ItemsLayout>
+                            <LinearItemsLayout Orientation="Horizontal" ItemSpacing="15"/>
+                        </CollectionView.ItemsLayout>
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="stream:StreamInfo">
+                                <Grid WidthRequest="200" HeightRequest="170">
+                                    <Frame Style="{StaticResource CardStyle}" BackgroundColor="#383838">
+                                        <Grid RowDefinitions="Auto,*,Auto">
+                                            <Label Text="{Binding StreamerName}" 
+                                           TextColor="White" 
+                                           FontAttributes="Bold" 
+                                           FontSize="14"/>
 
-                                    <Frame Grid.Row="1" Style="{StaticResource StreamPreviewStyle}">
-                                        <Label Text="Stream Preview" 
+                                            <Frame Grid.Row="1" Style="{StaticResource StreamPreviewStyle}">
+                                                <Label Text="{Binding Title}" 
                                                HorizontalOptions="Center" 
                                                VerticalOptions="Center" 
-                                               TextColor="#AAAAAA"/>
-                                    </Frame>
+                                               TextColor="#AAAAAA"
+                                               LineBreakMode="TailTruncation"
+                                               MaxLines="2"/>
+                                            </Frame>
 
-                                    <Label Grid.Row="2" 
-                                           Text="Focus: 81% | Beta: Medium" 
+                                            <Label Grid.Row="2" 
+                                           Text="{Binding Game}" 
                                            TextColor="#AAAAAA" 
                                            FontSize="12"/>
-                                </Grid>
-                            </Frame>
-                        </Grid>
-
-                        <!-- Recent Activity Card 2 (VOD) -->
-                        <Grid WidthRequest="200" HeightRequest="170">
-                            <Frame Style="{StaticResource CardStyle}" BackgroundColor="#383838">
-                                <Grid RowDefinitions="Auto,*,Auto">
-                                    <Label Text="Streamer Name" TextColor="White" 
-                                           FontAttributes="Bold" FontSize="14"/>
-
-                                    <Frame Grid.Row="1" Style="{StaticResource StreamPreviewStyle}">
-                                        <Label Text="VOD Preview" 
-                                               HorizontalOptions="Center" 
-                                               VerticalOptions="Center" 
-                                               TextColor="#AAAAAA"/>
+                                        </Grid>
                                     </Frame>
-
-                                    <Label Grid.Row="2" 
-                                           Text="Watched 2 days ago" 
-                                           TextColor="#AAAAAA" 
-                                           FontSize="12"/>
+                                    <Grid.GestureRecognizers>
+                                        <TapGestureRecognizer 
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type pageModels:YourDashboardPageModel}}, Path=ViewStreamCommand}"
+                                    CommandParameter="{Binding .}" />
+                                    </Grid.GestureRecognizers>
                                 </Grid>
-                            </Frame>
-                        </Grid>
-
-                        <!-- Recent Activity Card 3 (VOD) -->
-                        <Grid WidthRequest="200" HeightRequest="170">
-                            <Frame Style="{StaticResource CardStyle}" BackgroundColor="#383838">
-                                <Grid RowDefinitions="Auto,*,Auto">
-                                    <Label Text="Streamer Name" TextColor="White" 
-                                           FontAttributes="Bold" FontSize="14"/>
-
-                                    <Frame Grid.Row="1" Style="{StaticResource StreamPreviewStyle}">
-                                        <Label Text="VOD Preview" 
-                                               HorizontalOptions="Center" 
-                                               VerticalOptions="Center" 
-                                               TextColor="#AAAAAA"/>
-                                    </Frame>
-
-                                    <Label Grid.Row="2" 
-                                           Text="Watched 3 days ago" 
-                                           TextColor="#AAAAAA" 
-                                           FontSize="12"/>
-                                </Grid>
-                            </Frame>
-                        </Grid>
-                    </HorizontalStackLayout>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
                 </ScrollView>
             </Grid>
         </Frame>
