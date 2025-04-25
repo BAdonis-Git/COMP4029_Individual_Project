@@ -1,10 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using NeuroSpectator.Models.BCI.Common;
-using NeuroSpectator.Models.BCI.Muse;
+﻿using NeuroSpectator.Models.BCI.Common;
 using NeuroSpectator.Services.BCI.Interfaces;
-using NeuroSpectator.Services.BCI.Muse;
 using NeuroSpectator.Services.BCI.Muse.Core;
 
 namespace NeuroSpectator.Services.BCI.Factory

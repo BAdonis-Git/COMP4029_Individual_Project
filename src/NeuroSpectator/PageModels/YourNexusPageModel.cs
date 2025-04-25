@@ -1,14 +1,12 @@
-﻿using System;
-using System.Collections.ObjectModel;
-using System.Diagnostics;
-using System.Threading.Tasks;
-using System.Windows.Input;
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NeuroSpectator.Models.BCI.Common;
+using NeuroSpectator.Pages;
 using NeuroSpectator.Services.BCI;
 using NeuroSpectator.Services.BCI.Interfaces;
-using NeuroSpectator.Pages;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Windows.Input;
 
 namespace NeuroSpectator.PageModels
 {
@@ -324,7 +322,8 @@ namespace NeuroSpectator.PageModels
         /// </summary>
         private async void OnDeviceConnectionStateChanged(object sender, ConnectionStateChangedEventArgs e)
         {
-            await MainThread.InvokeOnMainThreadAsync(async () => {
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
                 IsConnected = e.NewState == ConnectionState.Connected;
                 Debug.WriteLine($"YourNexusPage: Device connection state changed to {e.NewState}");
 
@@ -357,7 +356,8 @@ namespace NeuroSpectator.PageModels
             Debug.WriteLine($"YourNexusPage: Connection status changed {e.OldStatus} -> {e.NewStatus}");
 
             // Refresh connection status on UI thread
-            await MainThread.InvokeOnMainThreadAsync(async () => {
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
                 await RefreshDeviceConnectionStatusAsync();
             });
         }
@@ -370,7 +370,8 @@ namespace NeuroSpectator.PageModels
             Debug.WriteLine($"YourNexusPage: Device connected event: {device.Name}");
 
             // Update connection status on UI thread
-            await MainThread.InvokeOnMainThreadAsync(() => {
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
                 IsConnected = true;
                 OnPropertyChanged(nameof(IsNotConnected));
                 OnPropertyChanged(nameof(HasConnectedDevice));
@@ -385,7 +386,8 @@ namespace NeuroSpectator.PageModels
             Debug.WriteLine($"YourNexusPage: Device disconnected event: {device.Name}");
 
             // Refresh connection status on UI thread
-            await MainThread.InvokeOnMainThreadAsync(async () => {
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
                 await RefreshDeviceConnectionStatusAsync();
             });
         }

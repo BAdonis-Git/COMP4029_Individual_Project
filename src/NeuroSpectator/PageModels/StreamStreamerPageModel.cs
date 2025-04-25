@@ -1,19 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using System.Windows.Input;
-using Microsoft.Maui.Controls;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using NeuroSpectator.Models.BCI.Common;
-using NeuroSpectator.Services.BCI.Interfaces;
+using NeuroSpectator.Models.Stream;
 using NeuroSpectator.Services.BCI;
+using NeuroSpectator.Services.BCI.Interfaces;
 using NeuroSpectator.Services.Integration;
 using NeuroSpectator.Services.Streaming;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using NeuroSpectator.Services.Visualisation;
 using System.Diagnostics;
-using NeuroSpectator.Models.Stream;
 using System.Net;
+using System.Windows.Input;
 
 namespace NeuroSpectator.PageModels
 {
@@ -242,7 +238,8 @@ namespace NeuroSpectator.PageModels
                 // Check if there's already a connected device
                 if (deviceManager.CurrentDevice != null && deviceManager.CurrentDevice.IsConnected)
                 {
-                    await MainThread.InvokeOnMainThreadAsync(() => {
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                    {
                         IsDeviceConnected = true;
                         ConnectedDeviceName = deviceManager.CurrentDevice.Name ?? "Unknown Device";
                         DeviceStatusMessage = $"Connected to {ConnectedDeviceName}";
@@ -263,7 +260,8 @@ namespace NeuroSpectator.PageModels
 
                     if (statusInfo.IsConnected)
                     {
-                        await MainThread.InvokeOnMainThreadAsync(() => {
+                        await MainThread.InvokeOnMainThreadAsync(() =>
+                        {
                             IsDeviceConnected = true;
                             ConnectedDeviceName = statusInfo.DeviceName ?? "Unknown Device";
                             DeviceStatusMessage = $"Connected to {ConnectedDeviceName}";
@@ -272,7 +270,8 @@ namespace NeuroSpectator.PageModels
                     }
                     else
                     {
-                        await MainThread.InvokeOnMainThreadAsync(() => {
+                        await MainThread.InvokeOnMainThreadAsync(() =>
+                        {
                             IsDeviceConnected = false;
                             ConnectedDeviceName = "No Device";
                             DeviceStatusMessage = "No BCI device connected";
@@ -305,7 +304,8 @@ namespace NeuroSpectator.PageModels
 
                 deviceCheckTimer = Application.Current.Dispatcher.CreateTimer();
                 deviceCheckTimer.Interval = TimeSpan.FromMilliseconds(DeviceCheckIntervalMs);
-                deviceCheckTimer.Tick += async (s, e) => {
+                deviceCheckTimer.Tick += async (s, e) =>
+                {
                     try
                     {
                         await RefreshDeviceConnectionStatusAsync();
@@ -576,7 +576,8 @@ namespace NeuroSpectator.PageModels
             if (BrainMetrics.ContainsKey(metricName))
             {
                 // Update on the UI thread
-                MainThread.BeginInvokeOnMainThread(() => {
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
                     BrainMetrics[metricName] = value;
                 });
             }
@@ -615,7 +616,8 @@ namespace NeuroSpectator.PageModels
         {
             Debug.WriteLine($"StreamerPage: Device connection state changed {e.OldState} -> {e.NewState}");
 
-            await MainThread.InvokeOnMainThreadAsync(async () => {
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
                 // If the state is now Connected or Disconnected, refresh device status
                 if (e.NewState == ConnectionState.Connected || e.NewState == ConnectionState.Disconnected)
                 {
@@ -632,7 +634,8 @@ namespace NeuroSpectator.PageModels
             Debug.WriteLine($"StreamerPage: Connection status changed {e.OldStatus} -> {e.NewStatus}");
 
             // Refresh device status on UI thread
-            await MainThread.InvokeOnMainThreadAsync(async () => {
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
                 await RefreshDeviceConnectionStatusAsync();
             });
         }
@@ -644,7 +647,8 @@ namespace NeuroSpectator.PageModels
         {
             Debug.WriteLine($"StreamerPage: Device connected event: {device.Name}");
 
-            await MainThread.InvokeOnMainThreadAsync(async () => {
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
                 // Update connection status
                 IsDeviceConnected = true;
                 ConnectedDeviceName = device.Name ?? "Unknown Device";
@@ -673,7 +677,8 @@ namespace NeuroSpectator.PageModels
         {
             Debug.WriteLine($"StreamerPage: Device disconnected event: {device.Name}");
 
-            await MainThread.InvokeOnMainThreadAsync(async () => {
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
                 // Refresh device status
                 await RefreshDeviceConnectionStatusAsync();
 
@@ -1228,9 +1233,11 @@ namespace NeuroSpectator.PageModels
                         var progressTimer = new System.Timers.Timer(500); // Update every 500ms
                         int dots = 0;
 
-                        progressTimer.Elapsed += (s, e) => {
+                        progressTimer.Elapsed += (s, e) =>
+                        {
                             dots = (dots + 1) % 4; // Cycle through 0-3 dots
-                            MainThread.BeginInvokeOnMainThread(() => {
+                            MainThread.BeginInvokeOnMainThread(() =>
+                            {
                                 StatusMessage = $"Waiting for live event to become active{new string('.', dots)}";
                                 UpdateStartStreamButtonText($"Waiting{new string('.', dots)}");
                             });
@@ -1305,9 +1312,11 @@ namespace NeuroSpectator.PageModels
                         progressTimer = new System.Timers.Timer(500); // Update every 500ms
                         dots = 0;
 
-                        progressTimer.Elapsed += (s, e) => {
+                        progressTimer.Elapsed += (s, e) =>
+                        {
                             dots = (dots + 1) % 4; // Cycle through 0-3 dots
-                            MainThread.BeginInvokeOnMainThread(() => {
+                            MainThread.BeginInvokeOnMainThread(() =>
+                            {
                                 StatusMessage = $"Validating RTMP endpoint{new string('.', dots)}";
                                 UpdateStartStreamButtonText($"Validating{new string('.', dots)}");
                             });
@@ -1475,7 +1484,8 @@ namespace NeuroSpectator.PageModels
                 // Schedule a reset of the button text after a delay if it shows an error
                 if (StartStreamButtonText.Contains("Failed"))
                 {
-                    MainThread.BeginInvokeOnMainThread(async () => {
+                    MainThread.BeginInvokeOnMainThread(async () =>
+                    {
                         await Task.Delay(3000);
                         UpdateStartStreamButtonText("Start Stream");
                     });

@@ -1,12 +1,9 @@
-﻿using System;
-using System.Collections.ObjectModel;
-using System.Threading.Tasks;
-using System.Windows.Input;
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using NeuroSpectator.Models.BCI.Common;
 using NeuroSpectator.Services;
 using NeuroSpectator.Services.BCI.Interfaces;
+using System.Collections.ObjectModel;
+using System.Windows.Input;
 
 namespace NeuroSpectator.PageModels
 {

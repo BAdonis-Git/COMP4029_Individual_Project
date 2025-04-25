@@ -1,7 +1,5 @@
-﻿using System;
-using System.Collections;
+﻿using System.Collections;
 using System.Globalization;
-using Microsoft.Maui.Controls;
 
 namespace NeuroSpectator.Utilities
 {

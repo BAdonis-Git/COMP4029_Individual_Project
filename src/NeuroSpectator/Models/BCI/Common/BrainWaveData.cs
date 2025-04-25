@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace NeuroSpectator.Models.BCI.Common
+﻿namespace NeuroSpectator.Models.BCI.Common
 {
     /// <summary>
     /// Represents brain wave data from a BCI device

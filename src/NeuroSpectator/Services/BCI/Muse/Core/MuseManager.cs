@@ -1,9 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using NeuroSpectator.Services.BCI.Muse.Interop;
+﻿using NeuroSpectator.Services.BCI.Muse.Interop;
 using Newtonsoft.Json;
-using NeuroSpectator.Models.BCI.Muse;
 
 namespace NeuroSpectator.Services.BCI.Muse.Core
 {

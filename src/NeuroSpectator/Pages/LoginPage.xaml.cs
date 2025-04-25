@@ -1,8 +1,6 @@
-using System;
-using System.Diagnostics;
-using Microsoft.Maui.Controls;
 using NeuroSpectator.PageModels;
 using NeuroSpectator.Services.Account;
+using System.Diagnostics;
 
 namespace NeuroSpectator.Pages
 {

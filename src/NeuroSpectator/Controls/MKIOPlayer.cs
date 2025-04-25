@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Microsoft.Maui.Controls;
-
 namespace NeuroSpectator.Controls
 {
     /// <summary>

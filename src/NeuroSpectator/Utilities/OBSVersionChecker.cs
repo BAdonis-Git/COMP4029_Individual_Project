@@ -1,10 +1,5 @@
-﻿using OBSWebsocketDotNet.Communication;
-using OBSWebsocketDotNet;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using OBSWebsocketDotNet;
+using OBSWebsocketDotNet.Communication;
 
 namespace NeuroSpectator.Utilities
 {
@@ -27,7 +22,8 @@ namespace NeuroSpectator.Utilities
                 EventHandler onConnected = null;
                 EventHandler<ObsDisconnectionInfo> onDisconnected = null;
 
-                onConnected = async (s, e) => {
+                onConnected = async (s, e) =>
+                {
                     obs.Connected -= onConnected;
                     obs.Disconnected -= onDisconnected;
 
@@ -52,7 +48,8 @@ namespace NeuroSpectator.Utilities
                     }
                 };
 
-                onDisconnected = (s, e) => {
+                onDisconnected = (s, e) =>
+                {
                     obs.Connected -= onConnected;
                     obs.Disconnected -= onDisconnected;
                     tcs.TrySetResult((false, $"Connection failed: {e.DisconnectReason}", "N/A", "N/A"));

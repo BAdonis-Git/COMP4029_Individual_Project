@@ -1,12 +1,8 @@
-﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Diagnostics;
-using NeuroSpectator.Models.BCI.Common;
+﻿using NeuroSpectator.Models.BCI.Common;
 using NeuroSpectator.Models.BCI.Muse;
 using NeuroSpectator.Services.BCI.Interfaces;
 using NeuroSpectator.Services.BCI.Muse.Core;
-using Microsoft.Maui.Dispatching;
+using System.Diagnostics;
 using ConnectionState = NeuroSpectator.Models.BCI.Common.ConnectionState;
 
 namespace NeuroSpectator.Services.BCI.Muse
@@ -162,7 +158,8 @@ namespace NeuroSpectator.Services.BCI.Muse
 
                 // Step 2: Register essential listeners with the configuration ready handler
                 connectionHandler = new MuseConnectionHandler(this);
-                connectionHandler.ConfigurationReady += (s, e) => {
+                connectionHandler.ConfigurationReady += (s, e) =>
+                {
                     Debug.WriteLine("Device ready for configuration access");
                     configurationReadyTcs.TrySetResult(true);
 
@@ -221,7 +218,8 @@ namespace NeuroSpectator.Services.BCI.Muse
                 var connectTask = WaitForConnectionStateWithDirectCheck(ConnectionState.Connected, TimeSpan.FromSeconds(30));
 
                 // Create a timeout for configuration readiness
-                var configTimeoutTask = Task.Delay(TimeSpan.FromSeconds(15)).ContinueWith(_ => {
+                var configTimeoutTask = Task.Delay(TimeSpan.FromSeconds(15)).ContinueWith(_ =>
+                {
                     configurationReadyTcs.TrySetResult(false);
                     return false;
                 });
@@ -1254,7 +1252,8 @@ namespace NeuroSpectator.Services.BCI.Muse
                     {
                         configurationReadyFired = true;
 
-                        Task.Run(async () => {
+                        Task.Run(async () =>
+                        {
                             try
                             {
                                 // Critical: Get version BEFORE getting configuration

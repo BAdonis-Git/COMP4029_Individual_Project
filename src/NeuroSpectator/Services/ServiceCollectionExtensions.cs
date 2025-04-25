@@ -1,15 +1,12 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Maui.Networking;
+﻿using NeuroSpectator.Models.BCI.Common;
 using NeuroSpectator.Services.BCI;
-using NeuroSpectator.Models.BCI.Common;
 using NeuroSpectator.Services.BCI.Factory;
 using NeuroSpectator.Services.BCI.Interfaces;
 using NeuroSpectator.Services.BCI.Muse.Core;
 using NeuroSpectator.Services.BCI.Muse.Platform;
-using NeuroSpectator.Services;
+using NeuroSpectator.Services.Integration;
 using NeuroSpectator.Services.Streaming;
 using NeuroSpectator.Services.Visualisation;
-using NeuroSpectator.Services.Integration;
 
 namespace NeuroSpectator.Services
 {

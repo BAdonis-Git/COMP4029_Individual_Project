@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using NeuroSpectator.Models.BCI.Common;
+﻿using NeuroSpectator.Models.BCI.Common;
 using NeuroSpectator.Services.BCI.Interfaces;
 using NeuroSpectator.Services.Streaming;
 using NeuroSpectator.Services.Visualisation;

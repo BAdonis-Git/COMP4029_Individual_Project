@@ -1,7 +1,5 @@
 ﻿using Microsoft.Identity.Client;
 using NeuroSpectator.Models.Account;
-using System;
-using System.Threading.Tasks;
 
 namespace NeuroSpectator.Services.Authentication
 {

@@ -1,13 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading.Tasks;
-using Microsoft.Maui.Dispatching;
+﻿using NeuroSpectator.Services.Visualisation;
 using OBSWebsocketDotNet;
+using OBSWebsocketDotNet.Communication;
 using OBSWebsocketDotNet.Types;
 using OBSWebsocketDotNet.Types.Events;
-using NeuroSpectator.Services.Visualisation;
-using OBSWebsocketDotNet.Communication;
 
 namespace NeuroSpectator.Services.Streaming
 {
@@ -107,13 +102,15 @@ namespace NeuroSpectator.Services.Streaming
                 EventHandler onConnected = null;
                 EventHandler<ObsDisconnectionInfo> onDisconnected = null;
 
-                onConnected = (s, e) => {
+                onConnected = (s, e) =>
+                {
                     obsWebsocket.Connected -= onConnected;
                     obsWebsocket.Disconnected -= onDisconnected;
                     tcs.TrySetResult(true);
                 };
 
-                onDisconnected = (s, e) => {
+                onDisconnected = (s, e) =>
+                {
                     obsWebsocket.Connected -= onConnected;
                     obsWebsocket.Disconnected -= onDisconnected;
                     tcs.TrySetException(new Exception($"Connection failed: {e.DisconnectReason}"));

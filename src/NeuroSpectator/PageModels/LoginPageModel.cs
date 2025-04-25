@@ -1,9 +1,7 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NeuroSpectator.Services.Account;
-using System;
 using System.Diagnostics;
-using System.Threading.Tasks;
 using System.Windows.Input;
 
 namespace NeuroSpectator.PageModels

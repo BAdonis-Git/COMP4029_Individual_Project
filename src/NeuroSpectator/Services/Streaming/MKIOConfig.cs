@@ -1,11 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Maui.Storage;
+﻿using Microsoft.Extensions.Configuration;
 using MK.IO.Models;
 using NeuroSpectator.Models.Stream;
+using System.Diagnostics;
 
 namespace NeuroSpectator.Services.Streaming
 {

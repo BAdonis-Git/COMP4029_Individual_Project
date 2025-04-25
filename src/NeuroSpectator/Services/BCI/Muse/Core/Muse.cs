@@ -1,10 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using NeuroSpectator.Services.BCI.Muse.Interop;
 using System.Runtime.InteropServices;
-using System.Threading.Tasks;
-using NeuroSpectator.Services.BCI.Muse.Interop;
-using NeuroSpectator.Services.BCI.Muse.Core;
-using Newtonsoft.Json;
 
 // Define a minimal AOT namespace to support MonoPInvokeCallback
 namespace AOT

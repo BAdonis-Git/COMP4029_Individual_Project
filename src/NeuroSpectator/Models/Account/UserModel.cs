@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace NeuroSpectator.Models.Account
+﻿namespace NeuroSpectator.Models.Account
 {
     /// <summary>
     /// Represents a user account in the application

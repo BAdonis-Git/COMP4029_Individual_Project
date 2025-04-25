@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace NeuroSpectator.Models.Stream
+﻿namespace NeuroSpectator.Models.Stream
 {
     /// <summary>
     /// Represents information about a stream for display in the UI.

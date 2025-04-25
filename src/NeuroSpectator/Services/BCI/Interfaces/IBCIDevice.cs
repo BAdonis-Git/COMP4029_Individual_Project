@@ -1,6 +1,4 @@
-﻿using System;
-using System.Threading.Tasks;
-using NeuroSpectator.Models.BCI.Common;
+﻿using NeuroSpectator.Models.BCI.Common;
 
 namespace NeuroSpectator.Services.BCI.Interfaces
 {

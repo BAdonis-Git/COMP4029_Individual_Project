@@ -1,8 +1,5 @@
 ﻿using Microsoft.Identity.Client;
 using NeuroSpectator.Models.Account;
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace NeuroSpectator.Services.Authentication
 {
@@ -26,12 +23,12 @@ namespace NeuroSpectator.Services.Authentication
             try
             {
 #if WINDOWS
-                    redirectUri = "http://localhost";
+                redirectUri = "http://localhost";
 #elif ANDROID
-                    redirectUri = "msal8148bc5a-c57b-491a-97fd-30ae8e61f960://auth";
+                redirectUri = "msal8148bc5a-c57b-491a-97fd-30ae8e61f960://auth";
 #else
                 redirectUri = "msal://callback";
-                #endif
+#endif
 
                 msalClient = PublicClientApplicationBuilder
                     .Create(clientId)

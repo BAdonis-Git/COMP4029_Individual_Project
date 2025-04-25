@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Microsoft.Maui.Controls;
-using NeuroSpectator.Services.Streaming;
+﻿using NeuroSpectator.Services.Streaming;
 using NeuroSpectator.Services.Visualisation;
 
 namespace NeuroSpectator.Services.Integration

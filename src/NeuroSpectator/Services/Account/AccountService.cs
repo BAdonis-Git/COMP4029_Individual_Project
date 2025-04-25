@@ -1,9 +1,6 @@
 ﻿using NeuroSpectator.Models.Account;
 using NeuroSpectator.Services.Authentication;
 using NeuroSpectator.Services.Storage;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace NeuroSpectator.Services.Account
 {

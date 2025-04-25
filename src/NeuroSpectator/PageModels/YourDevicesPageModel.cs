@@ -1,18 +1,12 @@
-﻿using System;
-using System.Collections.ObjectModel;
-using System.Diagnostics;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows.Input;
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NeuroSpectator.Models.BCI.Common;
-using NeuroSpectator.Models.BCI.Muse;
-using NeuroSpectator.Services;
 using NeuroSpectator.Services.BCI.Interfaces;
 using NeuroSpectator.Services.BCI.Muse;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Windows.Input;
 using ConnectionState = NeuroSpectator.Models.BCI.Common.ConnectionState;
-using Microsoft.Maui.Dispatching;
 
 namespace NeuroSpectator.PageModels
 {

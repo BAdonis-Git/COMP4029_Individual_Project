@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace NeuroSpectator.Models.Stream
+﻿namespace NeuroSpectator.Models.Stream
 {
     /// <summary>
     /// Represents a chat message in the streaming system that can come from

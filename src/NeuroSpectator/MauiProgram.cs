@@ -1,21 +1,18 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using CommunityToolkit.Maui;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using NeuroSpectator.Controls;
 using NeuroSpectator.PageModels;
 using NeuroSpectator.Pages;
 using NeuroSpectator.Services;
-using NeuroSpectator.Services.Authentication;
-using NeuroSpectator.Services.Storage;
 using NeuroSpectator.Services.Account;
+using NeuroSpectator.Services.Authentication;
+using NeuroSpectator.Services.BCI;
+using NeuroSpectator.Services.BCI.Interfaces;
+using NeuroSpectator.Services.Integration;
+using NeuroSpectator.Services.Storage;
 using NeuroSpectator.Services.Streaming;
 using NeuroSpectator.Services.Visualisation;
-using NeuroSpectator.Services.Integration;
-using NeuroSpectator.Services.BCI.Interfaces;
-using NeuroSpectator.Services.BCI;
-using Microsoft.Extensions.DependencyInjection;
-using CommunityToolkit.Maui;
-using Microsoft.Maui.Networking;
-using NeuroSpectator.Controls;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Configuration.Json;
 
 namespace NeuroSpectator;
 

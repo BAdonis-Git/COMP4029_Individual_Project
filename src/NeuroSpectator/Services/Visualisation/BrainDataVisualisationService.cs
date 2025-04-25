@@ -1,13 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Net;
+﻿using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Maui.Dispatching;
-using NeuroSpectator.Models.BCI.Common;
 
 namespace NeuroSpectator.Services.Visualisation
 {
@@ -115,7 +108,7 @@ namespace NeuroSpectator.Services.Visualisation
             {
                 // Ensure the OBS template is available
                 await EnsureOBSTemplateAvailableAsync();
-                
+
                 // Ensure the diagnostic template is available
                 await EnsureDiagnosticTemplateAvailableAsync();
 
@@ -179,11 +172,12 @@ namespace NeuroSpectator.Services.Visualisation
             hasReceivedData = true;
 
             // Add to metric log for diagnostics
-            metricLog.Enqueue(new DiagnosticLogEntry { 
+            metricLog.Enqueue(new DiagnosticLogEntry
+            {
                 Timestamp = DateTime.Now,
                 Metrics = new Dictionary<string, string>(brainMetrics)
             });
-            
+
             // Keep log limited to 100 entries
             if (metricLog.Count > 100)
                 metricLog.Dequeue();
@@ -217,7 +211,8 @@ namespace NeuroSpectator.Services.Visualisation
                 eventHistory.Add(brainEvent);
 
                 // Add to metric log for diagnostics
-                metricLog.Enqueue(new DiagnosticLogEntry { 
+                metricLog.Enqueue(new DiagnosticLogEntry
+                {
                     Timestamp = DateTime.Now,
                     EventType = eventType,
                     Description = eventDescription
@@ -233,7 +228,8 @@ namespace NeuroSpectator.Services.Visualisation
                 await GenerateVisualisationsAsync();
 
                 // After a few seconds, clear the current event
-                _ = Task.Run(async () => {
+                _ = Task.Run(async () =>
+                {
                     await Task.Delay(5000); // Show for 5 seconds
                     if (currentEvent == brainEvent) // Only clear if it's still the same event
                     {
@@ -347,7 +343,7 @@ namespace NeuroSpectator.Services.Visualisation
                         hasData = hasReceivedData,
                         timeSinceLastUpdate = (DateTime.Now - lastDataUpdateTime).TotalMilliseconds
                     });
-                    
+
                     byte[] jsonBytes = Encoding.UTF8.GetBytes(json);
 
                     context.Response.ContentType = "application/json";
@@ -385,7 +381,7 @@ namespace NeuroSpectator.Services.Visualisation
                         currentEvent = currentEvent,
                         eventHistory = eventHistory
                     };
-                    
+
                     string json = System.Text.Json.JsonSerializer.Serialize(diagnosticData);
                     byte[] jsonBytes = Encoding.UTF8.GetBytes(json);
 
@@ -523,11 +519,11 @@ namespace NeuroSpectator.Services.Visualisation
             }
 
             html.AppendLine("    </div>");
-            
+
             // Add connection status indicator
             string statusClass = "connection-status";
             string statusText = "Data connected";
-            
+
             if (!hasReceivedData)
             {
                 statusClass += " status-offline";
@@ -538,9 +534,9 @@ namespace NeuroSpectator.Services.Visualisation
                 statusClass += " status-warning";
                 statusText = $"Data stale ({(int)(DateTime.Now - lastDataUpdateTime).TotalSeconds}s)";
             }
-            
+
             html.AppendLine($"    <div class=\"{statusClass}\">{statusText}</div>");
-            
+
             html.AppendLine("  </div>");
             html.AppendLine("</body>");
             html.AppendLine("</html>");
@@ -584,7 +580,7 @@ namespace NeuroSpectator.Services.Visualisation
 
             // Connection Status
             html.AppendLine("  <h2>Connection Status</h2>");
-            
+
             if (!hasReceivedData)
             {
                 html.AppendLine("  <div class=\"status error\">");
@@ -605,7 +601,7 @@ namespace NeuroSpectator.Services.Visualisation
             }
 
             html.AppendLine($"  <p>Data points received: <strong>{dataPointsReceived}</strong></p>");
-            
+
             if (hasReceivedData)
             {
                 html.AppendLine($"  <p>Session start: <strong>{DateTime.Now.AddSeconds(-dataPointsReceived).ToString("HH:mm:ss")}</strong></p>");
@@ -636,17 +632,17 @@ namespace NeuroSpectator.Services.Visualisation
             // Recent Events & Data Flow
             html.AppendLine("  <h2>Recent Events & Data Flow</h2>");
             html.AppendLine("  <div class=\"data-flow\">");
-            
+
             // Show recent log entries
             var logEntries = metricLog.ToArray();
             Array.Reverse(logEntries); // Most recent first
-            
+
             foreach (var entry in logEntries.Take(20)) // Show last 20 entries
             {
                 string entryClass = entry.EventType == "Data" ? "data-point" : "data-point event";
                 html.AppendLine($"    <div class=\"{entryClass}\">");
                 html.AppendLine($"      <span class=\"timestamp\">[{entry.Timestamp.ToString("HH:mm:ss.fff")}]</span> ");
-                
+
                 if (entry.EventType == "Data")
                 {
                     html.AppendLine($"      Data: ");
@@ -659,17 +655,17 @@ namespace NeuroSpectator.Services.Visualisation
                 {
                     html.AppendLine($"      Event: {entry.EventType} - {entry.Description}");
                 }
-                
+
                 html.AppendLine("    </div>");
             }
-            
+
             html.AppendLine("  </div>");
 
             // Debug Information
             html.AppendLine("  <h2>Debug Information</h2>");
             html.AppendLine($"  <p>Visualization Service URL: <code>{VisualisationUrl}</code></p>");
             html.AppendLine($"  <p>Server Status: <strong>{(IsServerRunning ? "Running" : "Stopped")}</strong></p>");
-            
+
             html.AppendLine("  <h2>Technical Information</h2>");
             html.AppendLine("  <p>To use these diagnostic visualizations in OBS:</p>");
             html.AppendLine("  <ol>");
@@ -680,7 +676,7 @@ namespace NeuroSpectator.Services.Visualisation
             html.AppendLine("    <li>Set width: 400, height: 600 for main view</li>");
             html.AppendLine("    <li>Check 'Refresh browser when scene becomes active'</li>");
             html.AppendLine("  </ol>");
-            
+
             html.AppendLine("  <p>Raw data endpoints for developers:</p>");
             html.AppendLine("  <ul>");
             html.AppendLine($"    <li>Current data: <code>{VisualisationUrl}/data</code></li>");
@@ -750,11 +746,11 @@ namespace NeuroSpectator.Services.Visualisation
                 svg.AppendLine($"  <text x=\"200\" y=\"{yPos}\" font-family=\"Arial\" font-size=\"16\" fill=\"white\" text-anchor=\"middle\" font-weight=\"bold\">BRAIN EVENT: {currentEvent.EventType}</text>");
                 svg.AppendLine($"  <text x=\"200\" y=\"{yPos + 20}\" font-family=\"Arial\" font-size=\"12\" fill=\"white\" text-anchor=\"middle\">{currentEvent.Description}</text>");
             }
-            
+
             // Add connection status indicator
             string statusColor = "#92D36E";
             string statusText = "Data connected";
-            
+
             if (!hasReceivedData)
             {
                 statusColor = "#FF5252";
@@ -765,7 +761,7 @@ namespace NeuroSpectator.Services.Visualisation
                 statusColor = "#FFD740";
                 statusText = "Data stale";
             }
-            
+
             svg.AppendLine($"  <text x=\"380\" y=\"290\" font-family=\"Arial\" font-size=\"10\" fill=\"{statusColor}\" text-anchor=\"end\">{statusText}</text>");
 
             svg.AppendLine("</svg>");
@@ -780,7 +776,7 @@ namespace NeuroSpectator.Services.Visualisation
             if (value.Contains("High")) return "HIGH";
             if (value.Contains("Medium")) return "MED";
             if (value.Contains("Low")) return "LOW";
-            
+
             // For focus percentage values
             if (value.EndsWith("%"))
             {
@@ -791,7 +787,7 @@ namespace NeuroSpectator.Services.Visualisation
                     return "LOW";
                 }
             }
-            
+
             return "N/A";
         }
 
@@ -808,7 +804,7 @@ namespace NeuroSpectator.Services.Visualisation
                     return (percent / 100.0).ToString("F2");
                 }
             }
-            
+
             // For μV values
             if (value.EndsWith("μV"))
             {
@@ -817,12 +813,12 @@ namespace NeuroSpectator.Services.Visualisation
                     return microvolt.ToString("F2");
                 }
             }
-            
+
             // For text values (High, Medium, Low)
             if (value == "High") return "0.9";
             if (value == "Medium") return "0.5";
             if (value == "Low") return "0.1";
-            
+
             return "N/A";
         }
 

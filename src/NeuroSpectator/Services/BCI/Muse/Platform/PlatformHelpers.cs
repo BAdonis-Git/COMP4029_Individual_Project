@@ -1,9 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
+﻿using System.Diagnostics;
 using System.Reflection;
-using System.Threading.Tasks;
 
 namespace NeuroSpectator.Services.BCI.Muse.Platform
 {
@@ -97,7 +93,7 @@ namespace NeuroSpectator.Services.BCI.Muse.Platform
                 {
                     var status1 = Android.App.Application.Context.CheckSelfPermission(Android.Manifest.Permission.BluetoothConnect);
                     var status2 = Android.App.Application.Context.CheckSelfPermission(Android.Manifest.Permission.BluetoothScan);
-                    return status1 == Android.Content.PM.Permission.Granted && 
+                    return status1 == Android.Content.PM.Permission.Granted &&
                            status2 == Android.Content.PM.Permission.Granted;
                 }
                 else
@@ -105,7 +101,7 @@ namespace NeuroSpectator.Services.BCI.Muse.Platform
                     var status1 = Android.App.Application.Context.CheckSelfPermission(Android.Manifest.Permission.Bluetooth);
                     var status2 = Android.App.Application.Context.CheckSelfPermission(Android.Manifest.Permission.BluetoothAdmin);
                     var status3 = Android.App.Application.Context.CheckSelfPermission(Android.Manifest.Permission.AccessFineLocation);
-                    return status1 == Android.Content.PM.Permission.Granted && 
+                    return status1 == Android.Content.PM.Permission.Granted &&
                            status2 == Android.Content.PM.Permission.Granted &&
                            status3 == Android.Content.PM.Permission.Granted;
                 }
@@ -136,7 +132,7 @@ namespace NeuroSpectator.Services.BCI.Muse.Platform
             try
             {
                 var requiredPermissions = new List<string>();
-                
+
                 // Android 12+ requires BLUETOOTH_CONNECT and BLUETOOTH_SCAN
                 if (Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.S)
                 {
@@ -149,7 +145,7 @@ namespace NeuroSpectator.Services.BCI.Muse.Platform
                     requiredPermissions.Add(Android.Manifest.Permission.BluetoothAdmin);
                     requiredPermissions.Add(Android.Manifest.Permission.AccessFineLocation);
                 }
-                
+
                 await Microsoft.Maui.ApplicationModel.Permissions.RequestAsync<BluetoothPermission>();
             }
             catch (Exception ex)
@@ -287,7 +283,7 @@ namespace NeuroSpectator.Services.BCI.Muse.Platform
             get
             {
                 var permissions = new List<(string, bool)>();
-                
+
                 if (Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.S)
                 {
                     permissions.Add((Android.Manifest.Permission.BluetoothConnect, false));
@@ -299,7 +295,7 @@ namespace NeuroSpectator.Services.BCI.Muse.Platform
                     permissions.Add((Android.Manifest.Permission.BluetoothAdmin, false));
                     permissions.Add((Android.Manifest.Permission.AccessFineLocation, false));
                 }
-                
+
                 return permissions.ToArray();
             }
         }

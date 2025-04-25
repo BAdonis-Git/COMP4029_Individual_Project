@@ -1,11 +1,10 @@
-﻿using System;
+﻿using NeuroSpectator.Services.BCI.Muse.Core;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using NeuroSpectator.Services.BCI.Muse.Core;
 
 namespace NeuroSpectator.Services.BCI.Muse.Interop
 {
-    
+
     internal delegate void ApiCallback(string jsonArgs);
     internal delegate void DataCallback(MuseDataPacketType packetType, nint valuesBuf, int numValues, long timestamp, string macAddress);
 

@@ -1,11 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
-using Microsoft.Maui.Dispatching;
-using NeuroSpectator.Models.BCI.Common;
+﻿using System.Text.Json;
 
 namespace NeuroSpectator.Services.Visualisation
 {

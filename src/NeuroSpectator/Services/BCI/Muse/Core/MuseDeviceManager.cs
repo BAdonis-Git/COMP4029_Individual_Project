@@ -1,14 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.Maui.Dispatching;
-using NeuroSpectator.Models.BCI.Common;
+﻿using NeuroSpectator.Models.BCI.Common;
 using NeuroSpectator.Models.BCI.Muse;
 using NeuroSpectator.Services.BCI.Interfaces;
 using NeuroSpectator.Services.BCI.Muse.Platform;
-using NeuroSpectator.Services.BCI.Muse.Core;
+using System.Collections.ObjectModel;
 
 namespace NeuroSpectator.Services.BCI.Muse.Core
 {

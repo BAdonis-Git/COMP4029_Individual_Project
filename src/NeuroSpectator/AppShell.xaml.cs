@@ -1,7 +1,4 @@
-﻿using System;
-using Microsoft.Maui.Controls;
-
-namespace NeuroSpectator
+﻿namespace NeuroSpectator
 {
     public partial class AppShell : Shell
     {
