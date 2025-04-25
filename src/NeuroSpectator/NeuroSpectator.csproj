@@ -31,6 +31,30 @@
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'tizen'">6.5</SupportedOSPlatformVersion>
 		<DefaultLanguage>en-gb</DefaultLanguage>
 	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net8.0-android|AnyCPU'">
+	  <ApplicationId>com.uonproject.neurospectator</ApplicationId>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net8.0-ios|AnyCPU'">
+	  <ApplicationId>com.uonproject.neurospectator</ApplicationId>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net8.0-maccatalyst|AnyCPU'">
+	  <ApplicationId>com.uonproject.neurospectator</ApplicationId>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net8.0-windows10.0.19041.0|AnyCPU'">
+	  <ApplicationId>com.uonproject.neurospectator</ApplicationId>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net8.0-android|AnyCPU'">
+	  <ApplicationId>com.uonproject.neurospectator</ApplicationId>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net8.0-ios|AnyCPU'">
+	  <ApplicationId>com.uonproject.neurospectator</ApplicationId>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net8.0-maccatalyst|AnyCPU'">
+	  <ApplicationId>com.uonproject.neurospectator</ApplicationId>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net8.0-windows10.0.19041.0|AnyCPU'">
+	  <ApplicationId>com.uonproject.neurospectator</ApplicationId>
+	</PropertyGroup>
 
 	<ItemGroup>
 		<!-- App Icon -->
@@ -97,12 +121,16 @@
 	<ItemGroup Condition="'$(Configuration)' == 'Debug'">
 		<EmbeddedResource Include="Resources\Raw\Debug_x64\libmuse.dll" />
 		<EmbeddedResource Include="appsettings.json" />
+		<EmbeddedResource Include="Resources\npm\mkplayer\mkplayer.js" LogicalName="NeuroSpectator.Resources.MKPlayer.mkplayer.js" />
+		<EmbeddedResource Include="Resources\npm\mkplayer\mkplayer-ui.css" LogicalName="NeuroSpectator.Resources.MKPlayer.mkplayer-ui.css" />
 	</ItemGroup>
 
 	<!-- Embedded resources - Release configuration -->
 	<ItemGroup Condition="'$(Configuration)' == 'Release'">
 		<EmbeddedResource Include="Resources\Raw\Release_x64\libmuse.dll" />
 		<EmbeddedResource Include="appsettings.json" />
+		<EmbeddedResource Include="Resources\npm\mkplayer\mkplayer.js" LogicalName="NeuroSpectator.Resources.MKPlayer.mkplayer.js" />
+		<EmbeddedResource Include="Resources\npm\mkplayer\mkplayer-ui.css" LogicalName="NeuroSpectator.Resources.MKPlayer.mkplayer-ui.css" />
 	</ItemGroup>
 
 	<!-- Platform-specific configuration for Android -->

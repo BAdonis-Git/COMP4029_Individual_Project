@@ -15,11 +15,46 @@ namespace NeuroSpectator.PageModels
     /// <summary>
     /// View model for the StreamSpectatorPage
     /// </summary>
+    [QueryProperty(nameof(StreamId), "streamId")]
     public partial class StreamSpectatorPageModel : ObservableObject, IDisposable
     {
         private readonly IMKIOStreamingService streamingService;
         private MKIOPlayer player;
         private bool _disposed = false;
+        private string streamId;
+
+        [ObservableProperty]
+        private bool isProcessingStreamId = false;
+
+        public string StreamId
+        {
+            get => streamId;
+            set
+            {
+                if (streamId != value)
+                {
+                    Debug.WriteLine($"StreamId property set to: {value}");
+                    streamId = value;
+                    OnPropertyChanged(nameof(StreamId));
+
+                    if (!string.IsNullOrEmpty(value) && !IsProcessingStreamId)
+                    {
+                        IsProcessingStreamId = true;
+                        MainThread.BeginInvokeOnMainThread(async () =>
+                        {
+                            try
+                            {
+                                await ProcessStreamIdAsync(value);
+                            }
+                            finally
+                            {
+                                IsProcessingStreamId = false;
+                            }
+                        });
+                    }
+                }
+            }
+        }
 
         #region Observable Properties
 
@@ -97,6 +132,26 @@ namespace NeuroSpectator.PageModels
             TogglePlayCommand = new AsyncRelayCommand(TogglePlayAsync);
             ToggleMuteCommand = new AsyncRelayCommand(ToggleMuteAsync);
             CloseStreamCommand = new AsyncRelayCommand(CloseStreamAsync);
+
+            Debug.WriteLine("StreamSpectatorPageModel initialized");
+        }
+
+        /// <summary>
+        /// Process the stream ID received from QueryProperty
+        /// </summary>
+        private async Task ProcessStreamIdAsync(string id)
+        {
+            Debug.WriteLine($"Processing stream ID: {id}");
+            try
+            {
+                // Load the stream with the received ID
+                await LoadStreamDirectlyAsync(id);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error processing stream ID: {ex.Message}");
+                SetError($"Error processing stream: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -104,6 +159,7 @@ namespace NeuroSpectator.PageModels
         /// </summary>
         public void SetPlayer(MKIOPlayer player)
         {
+            Debug.WriteLine($"Setting player instance: {player != null}");
             this.player = player;
 
             // Subscribe to player events
@@ -111,6 +167,27 @@ namespace NeuroSpectator.PageModels
             {
                 player.PlayerStateChanged += OnPlayerStateChanged;
                 player.PlayerError += OnPlayerError;
+                Debug.WriteLine("Player events subscribed");
+
+                // If we already have a stream with a playback URL, initialize the player
+                if (Stream != null && !string.IsNullOrEmpty(Stream.PlaybackUrl))
+                {
+                    Debug.WriteLine($"Player set with existing stream: {Stream.Id}, initializing...");
+                    MainThread.BeginInvokeOnMainThread(async () =>
+                    {
+                        try
+                        {
+                            await player.InitializeWithUrlAsync(Stream.PlaybackUrl, Stream.IsLive);
+                            IsPlayerReady = true;
+                            StatusMessage = "Player ready";
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"Error initializing player with existing stream: {ex.Message}");
+                            SetError($"Player initialization error: {ex.Message}");
+                        }
+                    });
+                }
             }
         }
 
@@ -123,16 +200,22 @@ namespace NeuroSpectator.PageModels
             {
                 if (!IsInitialized)
                 {
-                    // Get the stream ID from navigation parameters
-                    string streamId = await GetStreamIdFromNavigationAsync();
-                    if (string.IsNullOrEmpty(streamId))
+                    Debug.WriteLine($"OnAppearingAsync - StreamId: {StreamId}");
+                    // If the StreamId was set via QueryProperty before OnAppearing, it will already be handled
+                    // If not, we need to manually process it from navigation parameters as a fallback
+                    if (string.IsNullOrEmpty(StreamId))
                     {
-                        SetError("No stream ID specified");
-                        return;
+                        string navigStreamId = await GetStreamIdFromNavigationAsync();
+                        if (!string.IsNullOrEmpty(navigStreamId))
+                        {
+                            // This will trigger the setter which will load the stream
+                            StreamId = navigStreamId;
+                        }
+                        else
+                        {
+                            SetError("No stream ID specified");
+                        }
                     }
-
-                    // Load the stream information
-                    await LoadStreamAsync(streamId);
 
                     IsInitialized = true;
                 }
@@ -164,15 +247,14 @@ namespace NeuroSpectator.PageModels
         }
 
         /// <summary>
-        /// Gets the stream ID from navigation parameters
-        /// </summary>
-        /// <summary>
-        /// Gets the stream ID from navigation parameters
+        /// Gets the stream ID from navigation parameters as a fallback
         /// </summary>
         private async Task<string> GetStreamIdFromNavigationAsync()
         {
             try
             {
+                Debug.WriteLine("Attempting to get stream ID from navigation");
+
                 // Get the current query string
                 var queryString = Shell.Current.CurrentState?.Location?.Query;
                 if (!string.IsNullOrEmpty(queryString))
@@ -206,7 +288,15 @@ namespace NeuroSpectator.PageModels
                     }
                 }
 
+                // Direct check of QueryProperty
+                if (!string.IsNullOrEmpty(StreamId))
+                {
+                    Debug.WriteLine($"Using existing StreamId from QueryProperty: {StreamId}");
+                    return StreamId;
+                }
+
                 // If we get here, no stream ID was found
+                Debug.WriteLine("No stream ID found in navigation parameters");
                 return string.Empty;
             }
             catch (Exception ex)
@@ -217,19 +307,34 @@ namespace NeuroSpectator.PageModels
         }
 
         /// <summary>
-        /// Loads the stream information and initializes the player
+        /// Loads the stream directly using the streamId
         /// </summary>
-        private async Task LoadStreamAsync(string streamId)
+        private async Task LoadStreamDirectlyAsync(string streamId)
         {
             try
             {
                 IsLoading = true;
                 HasError = false;
                 StatusMessage = "Loading stream...";
+                Debug.WriteLine($"Directly loading stream: {streamId}");
 
                 // Get stream info from the streaming service
-                Stream = await streamingService.GetStreamAsync(streamId);
+                try
+                {
+                    Stream = await streamingService.GetStreamAsync(streamId);
+                }
+                catch (MK.IO.ApiException apiEx)
+                {
+                    var errorDetails = $"API Exception: {apiEx.Message}\n" +
+                                       $"Status code: {apiEx.StatusCode}\n" +
+                                       $"Response body: {apiEx.Response}";
 
+                    Debug.WriteLine(errorDetails);
+                    // Log to file for examination
+                    File.WriteAllText(
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MKIOApiError.log"),
+                        errorDetails);
+                }
                 if (Stream == null)
                 {
                     SetError("Stream not found");
@@ -237,39 +342,72 @@ namespace NeuroSpectator.PageModels
                 }
 
                 StatusMessage = $"Loaded: {Stream.Title}";
+                Debug.WriteLine($"Stream loaded successfully: {Stream.Title}, PlaybackUrl: {(string.IsNullOrEmpty(Stream.PlaybackUrl) ? "NOT SET" : "Available")}");
 
                 // Initialize the player
                 if (player != null && !string.IsNullOrEmpty(Stream.PlaybackUrl))
                 {
                     StatusMessage = "Initializing player...";
-                    await player.InitializeWithUrlAsync(Stream.PlaybackUrl, Stream.IsLive);
+                    Debug.WriteLine("Initializing player with stream URL");
 
-                    // Set initial mute state
-                    await player.SetMutedAsync(true);
-
-                    // Auto-play if it's a live stream
-                    if (Stream.IsLive)
+                    try
                     {
-                        await Task.Delay(1000); // Wait for player to initialize
-                        await player.PlayAsync();
-                        IsPlaying = true;
-                        PlayPauseButtonText = "Pause";
-                    }
+                        // Wait for the player to initialize fully before proceeding
+                        bool initSuccess = await player.InitializeWithUrlAsync(Stream.PlaybackUrl, Stream.IsLive);
 
-                    IsPlayerReady = true;
-                    IsLoading = false;
-                    StatusMessage = Stream.IsLive ? "Live stream" : "VOD playback";
+                        if (!initSuccess)
+                        {
+                            Debug.WriteLine("Player initialization returned false");
+                            SetError("Player initialization failed");
+                            return;
+                        }
+
+                        // Player is now initialized, we can interact with it
+                        Debug.WriteLine("Player initialization successful");
+
+                        // Set initial mute state after initialization is confirmed
+                        await player.SetMutedAsync(true);
+
+                        // Auto-play if it's a live stream
+                        if (Stream.IsLive)
+                        {
+                            Debug.WriteLine("Stream is live - auto-playing");
+                            await player.PlayAsync();
+                            IsPlaying = true;
+                            PlayPauseButtonText = "Pause";
+                        }
+
+                        IsPlayerReady = true;
+                        IsLoading = false;
+                        StatusMessage = Stream.IsLive ? "Live stream" : "VOD playback";
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Player initialization error: {ex.Message}");
+                        SetError($"Player initialization error: {ex.Message}");
+                    }
                 }
                 else
                 {
-                    SetError("Failed to initialize player: No playback URL");
+                    string errorReason = player == null ? "Player not available" : "No playback URL";
+                    Debug.WriteLine($"Failed to initialize player: {errorReason}");
+                    SetError($"Failed to initialize player: {errorReason}");
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error loading stream: {ex.Message}");
+                Debug.WriteLine($"Error loading stream directly: {ex.Message}");
                 SetError($"Failed to load stream: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Legacy method to maintain backward compatibility
+        /// Now just calls LoadStreamDirectlyAsync
+        /// </summary>
+        private async Task LoadStreamAsync(string streamId)
+        {
+            await LoadStreamDirectlyAsync(streamId);
         }
 
         /// <summary>
@@ -301,6 +439,24 @@ namespace NeuroSpectator.PageModels
                         case "ready":
                             IsPlayerReady = true;
                             StatusMessage = "Player ready";
+
+                            // If we have a Stream but the player just became ready, try to autoplay for live content
+                            if (Stream?.IsLive == true && !IsPlaying)
+                            {
+                                MainThread.BeginInvokeOnMainThread(async () => {
+                                    try
+                                    {
+                                        await Task.Delay(500);
+                                        await player.PlayAsync();
+                                        IsPlaying = true;
+                                        PlayPauseButtonText = "Pause";
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Debug.WriteLine($"Error auto-playing: {ex.Message}");
+                                    }
+                                });
+                            }
                             break;
 
                         case "playing":
@@ -350,12 +506,17 @@ namespace NeuroSpectator.PageModels
         /// </summary>
         private async Task TogglePlayAsync()
         {
-            if (player == null || !IsPlayerReady) return;
+            if (player == null || !IsPlayerReady)
+            {
+                Debug.WriteLine("Cannot toggle play: player not ready");
+                return;
+            }
 
             try
             {
                 if (IsPlaying)
                 {
+                    Debug.WriteLine("Pausing playback");
                     await player.PauseAsync();
                     IsPlaying = false;
                     PlayPauseButtonText = "Play";
@@ -363,6 +524,7 @@ namespace NeuroSpectator.PageModels
                 }
                 else
                 {
+                    Debug.WriteLine("Starting playback");
                     await player.PlayAsync();
                     IsPlaying = true;
                     PlayPauseButtonText = "Pause";
@@ -386,6 +548,7 @@ namespace NeuroSpectator.PageModels
             try
             {
                 IsMuted = !IsMuted;
+                Debug.WriteLine($"Setting muted state: {IsMuted}");
                 await player.SetMutedAsync(IsMuted);
                 StatusMessage = IsMuted ? "Muted" : "Unmuted";
             }
@@ -403,6 +566,7 @@ namespace NeuroSpectator.PageModels
         {
             try
             {
+                Debug.WriteLine("Closing stream and navigating back");
                 // Stop player if active
                 if (player != null && IsPlayerReady)
                 {
@@ -410,8 +574,9 @@ namespace NeuroSpectator.PageModels
                     {
                         await player.PauseAsync();
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        Debug.WriteLine($"Non-critical error pausing player during close: {ex.Message}");
                         // Ignore errors during cleanup
                     }
                 }
@@ -447,6 +612,7 @@ namespace NeuroSpectator.PageModels
             {
                 if (disposing)
                 {
+                    Debug.WriteLine("Disposing StreamSpectatorPageModel");
                     // Unsubscribe from player events
                     if (player != null)
                     {

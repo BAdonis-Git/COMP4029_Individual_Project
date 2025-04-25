@@ -741,8 +741,9 @@ namespace NeuroSpectator.Services.Streaming
                         return stream;
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Debug.WriteLine($"Error getting live event: {ex.Message}");
                     // If not found as a live event, try as an asset (VOD)
                     try
                     {
@@ -781,9 +782,11 @@ namespace NeuroSpectator.Services.Streaming
 
                         return stream;
                     }
-                    catch
+                    catch (Exception assetEx)
                     {
+                        Debug.WriteLine($"Error getting asset: {assetEx.Message}");
                         // Not found as asset either
+                        throw new InvalidOperationException($"Stream not found: {streamId}", assetEx);
                     }
                 }
 

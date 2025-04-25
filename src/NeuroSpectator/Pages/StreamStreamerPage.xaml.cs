@@ -56,8 +56,10 @@ namespace NeuroSpectator.Pages
                 base.OnDisappearing();
 
                 // Clean up resources when the page disappears
-                // This helps ensure resources are properly released
-                // even if the page is closed without confirmation
+                if (_viewModel != null)
+                {
+                    await _viewModel.OnDisappearingAsync();
+                }
             }
             catch (Exception ex)
             {

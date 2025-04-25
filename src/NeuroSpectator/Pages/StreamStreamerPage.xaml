@@ -121,24 +121,15 @@
                     <Label Text="Stream Status:" TextColor="#AAAAAA" FontSize="14" HorizontalOptions="End"/>
                     <Label IsVisible="{Binding IsLive}" Text="LIVE" Style="{StaticResource LiveTagStyle}" HorizontalOptions="End" Margin="0,5,0,0"/>
                     <Label IsVisible="{Binding IsLive, Converter={StaticResource ZeroConverter}}" Text="OFFLINE" TextColor="#AAAAAA" FontSize="14" HorizontalOptions="End" Margin="0,5,0,0"/>
-                    <!-- Start Stream Button - should be visible when not streaming -->
+                    <!-- Start Stream Button - now uses the new properties -->
                     <Button IsVisible="{Binding IsLive, Converter={StaticResource ZeroConverter}}" 
                         Command="{Binding StartStreamCommand}" 
-                        IsEnabled="{Binding IsStartingStream, Converter={StaticResource ZeroConverter}}"
-                        BackgroundColor="{Binding IsStartingStream, Converter={StaticResource StreamingButtonColorConverter}}"
-                        Text="{Binding StartStreamButtonText}" 
+                        IsEnabled="{Binding CanStartStream, Mode=OneWay}"
+                        BackgroundColor="{Binding StreamButtonColor, Mode=OneWay}"
+                        Text="{Binding StreamButtonText, Mode=OneWay}" 
                         Style="{StaticResource PrimaryButtonStyle}" 
                         HorizontalOptions="End" 
-                        Margin="0,5,0,0">
-                        <Button.Triggers>
-                            <DataTrigger TargetType="Button"
-                                 Binding="{Binding IsStartingStream}"
-                                 Value="True">
-                                <Setter Property="BackgroundColor" Value="#7B61B1" />
-                                <!-- Dimmed purple -->
-                            </DataTrigger>
-                        </Button.Triggers>
-                    </Button>
+                        Margin="0,5,0,0"/>
                     <!-- End Stream Button - should be visible when streaming -->
                     <Button IsVisible="{Binding IsLive}" 
                         Command="{Binding EndStreamCommand}" 
@@ -252,10 +243,16 @@
                     <!-- WebView for OBS Virtual Camera preview -->
                     <Grid Grid.Row="1">
                         <!-- Preview WebView -->
-                        <WebView Source="{Binding PreviewUrl}"
-                 	IsVisible="{Binding IsPreviewAvailable}"
-                 	VerticalOptions="FillAndExpand"
-                 	HorizontalOptions="FillAndExpand"/>
+                        <WebView Source="{Binding PreviewUrl, Mode=OneWay}"
+                             IsVisible="{Binding IsPreviewAvailable}"
+                             VerticalOptions="FillAndExpand"
+                             HorizontalOptions="FillAndExpand">
+                            <WebView.Behaviors>
+                                <toolkit:EventToCommandBehavior 
+                                EventName="Navigated"
+                                Command="{Binding WebViewNavigatedCommand}"/>
+                            </WebView.Behaviors>
+                        </WebView>
 
                         <!-- Loading indicator -->
                         <ActivityIndicator IsRunning="{Binding IsConnectedToObs}"

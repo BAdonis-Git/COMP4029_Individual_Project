@@ -14,6 +14,7 @@ using NeuroSpectator.Services.Visualisation;
 using System.Diagnostics;
 using NeuroSpectator.Models.Stream;
 using System.Net;
+using System.IO;
 
 namespace NeuroSpectator.PageModels
 {
@@ -28,6 +29,14 @@ namespace NeuroSpectator.PageModels
         private const int DeviceCheckIntervalMs = 5000;
 
         private BrainDataOBSHelper brainDataObsHelper;
+
+        public enum StreamStartStateType
+        {
+            Ready,
+            StartingUp,
+            Finalizing,
+            Failed
+        }
 
         #region Properties
 
@@ -128,10 +137,52 @@ namespace NeuroSpectator.PageModels
         [ObservableProperty]
         private string startStreamButtonText = "Start Stream";
 
+        [ObservableProperty]
+        private StreamStartStateType streamStartState = StreamStartStateType.Ready;
+
         // Derived properties
         public bool NoDeviceConnected => !IsDeviceConnected;
+        public bool CanStartStream => IsConnectedToObs && IsDeviceConnected && !IsLive &&
+                              StreamStartState == StreamStartStateType.Ready;
+        public string StreamButtonText => StreamStartState switch
+        {
+            StreamStartStateType.Ready => "Start Stream",
+            StreamStartStateType.StartingUp => "Starting Up",
+            StreamStartStateType.Finalizing => "Finalizing",
+            StreamStartStateType.Failed => "Start Failed",
+            _ => "Start Stream"
+        };
 
-        public bool CanStartStream => IsConnectedToObs && IsDeviceConnected && !IsLive;
+        public Color StreamButtonColor => StreamStartState switch
+        {
+            StreamStartStateType.Ready => Color.FromArgb("#B388FF"), // Default purple
+            StreamStartStateType.StartingUp => Color.FromArgb("#9575CD"), // Lighter purple for starting
+            StreamStartStateType.Finalizing => Color.FromArgb("#7986CB"), // Blue-ish for finalizing
+            StreamStartStateType.Failed => Color.FromArgb("#F44336"), // Red for failed
+            _ => Color.FromArgb("#B388FF")
+        };
+
+        partial void OnStreamStartStateChanged(StreamStartStateType value)
+        {
+            OnPropertyChanged(nameof(StreamButtonText));
+            OnPropertyChanged(nameof(StreamButtonColor));
+            OnPropertyChanged(nameof(CanStartStream));
+        }
+
+        partial void OnIsConnectedToObsChanged(bool value)
+        {
+            OnPropertyChanged(nameof(CanStartStream));
+        }
+
+        partial void OnIsDeviceConnectedChanged(bool value)
+        {
+            OnPropertyChanged(nameof(CanStartStream));
+        }
+
+        partial void OnIsLiveChanged(bool value)
+        {
+            OnPropertyChanged(nameof(CanStartStream));
+        }
 
         #endregion
 
@@ -155,6 +206,7 @@ namespace NeuroSpectator.PageModels
         public ICommand DiagnoseObsCommand { get; }
         public ICommand ToggleVirtualCameraCommand { get; }
         public ICommand RefreshDeviceStatusCommand { get; }
+        public ICommand WebViewNavigatedCommand { get; }
 
         #endregion
 
@@ -190,6 +242,7 @@ namespace NeuroSpectator.PageModels
             DiagnoseObsCommand = new AsyncRelayCommand(DiagnoseOBSConnectionAsync);
             ToggleVirtualCameraCommand = new AsyncRelayCommand(ToggleVirtualCameraAsync);
             RefreshDeviceStatusCommand = new AsyncRelayCommand(RefreshDeviceConnectionStatusAsync);
+            WebViewNavigatedCommand = new Command<WebNavigatedEventArgs>(OnWebViewNavigated);
 
             // Subscribe to events
             obsService.ConnectionStatusChanged += OnObsConnectionStatusChanged;
@@ -233,6 +286,7 @@ namespace NeuroSpectator.PageModels
         /// <summary>
         /// Initializes the device connection status
         /// </summary>
+        /// 
         private async Task InitializeDeviceConnectionAsync()
         {
             try
@@ -309,6 +363,7 @@ namespace NeuroSpectator.PageModels
                     try
                     {
                         await RefreshDeviceConnectionStatusAsync();
+                        LogDiagnostics();
                     }
                     catch (Exception ex)
                     {
@@ -620,6 +675,7 @@ namespace NeuroSpectator.PageModels
                 if (e.NewState == ConnectionState.Connected || e.NewState == ConnectionState.Disconnected)
                 {
                     await RefreshDeviceConnectionStatusAsync();
+                    LogDiagnostics();
                 }
             });
         }
@@ -635,6 +691,7 @@ namespace NeuroSpectator.PageModels
             await MainThread.InvokeOnMainThreadAsync(async () => {
                 await RefreshDeviceConnectionStatusAsync();
             });
+            LogDiagnostics();
         }
 
         /// <summary>
@@ -676,7 +733,7 @@ namespace NeuroSpectator.PageModels
             await MainThread.InvokeOnMainThreadAsync(async () => {
                 // Refresh device status
                 await RefreshDeviceConnectionStatusAsync();
-
+                LogDiagnostics();
                 // If we're streaming and the device disconnects, end the stream
                 if (IsLive)
                 {
@@ -706,7 +763,7 @@ namespace NeuroSpectator.PageModels
                 if (IsConnectedToObs)
                 {
                     await RefreshObsInfoAsync();
-
+                    LogDiagnostics();
                     // Set up preview URL
                     await SetupVirtualCameraPreviewAsync();
 
@@ -721,10 +778,13 @@ namespace NeuroSpectator.PageModels
                 }
 
                 // Check device connection status
+                await RefreshObsInfoAsync();
                 await RefreshDeviceConnectionStatusAsync();
+                await ForceUIRefresh();
 
                 // Start device check timer if not already started
                 StartDeviceCheckTimer();
+                
             }
             catch (Exception ex)
             {
@@ -755,6 +815,12 @@ namespace NeuroSpectator.PageModels
                     {
                         await EndStreamAsync();
                     }
+                }
+
+                // Important: Stop the visualization server
+                if (visualizationService != null && visualizationService.IsServerRunning)
+                {
+                    await visualizationService.StopServerAsync();
                 }
             }
             catch (Exception ex)
@@ -849,8 +915,9 @@ namespace NeuroSpectator.PageModels
                 if (obsService.IsConnected)
                 {
                     await RefreshObsInfoAsync();
+                    LogDiagnostics();
                     StatusMessage = "Connected to OBS";
-
+                    await ForceUIRefresh();
                     // Set up the preview URL for virtual camera
                     await SetupVirtualCameraPreviewAsync();
                 }
@@ -896,6 +963,19 @@ namespace NeuroSpectator.PageModels
                 {
                     streamTimer.Stop();
                 }
+
+                // Make sure to update the preview state
+                if (IsConnectedToObs)
+                {
+                    // Refresh the preview
+                    await SetupVirtualCameraPreviewAsync();
+                }
+
+                // Explicitly update the connection state in the UI
+                IsConnectedToObs = obsService.IsConnected;
+                OnPropertyChanged(nameof(IsConnectedToObs));
+                OnPropertyChanged(nameof(IsPreviewAvailable));
+                OnPropertyChanged(nameof(CanStartStream));
             }
             catch (Exception ex)
             {
@@ -910,26 +990,90 @@ namespace NeuroSpectator.PageModels
         {
             try
             {
-                // Ensure the visualization server is running
-                if (!visualizationService.IsServerRunning)
+                // Check if visualization service is available
+                if (visualizationService == null)
                 {
-                    await visualizationService.StartServerAsync();
+                    Debug.WriteLine("ERROR: Visualization service is null");
+                    IsPreviewAvailable = false;
+                    OnPropertyChanged(nameof(IsPreviewAvailable));
+                    return;
+                }
+
+                // Try to start the server - will reuse existing server if already running
+                bool serverStarted = false;
+
+                // Use retry mechanism with backoff
+                for (int attempt = 0; attempt < 3; attempt++)
+                {
+                    try
+                    {
+                        if (!visualizationService.IsServerRunning)
+                        {
+                            await visualizationService.StartServerAsync();
+                        }
+                        serverStarted = visualizationService.IsServerRunning;
+                        if (serverStarted)
+                            break;
+                    }
+                    catch (Exception startEx)
+                    {
+                        Debug.WriteLine($"Attempt {attempt + 1}: Error starting visualization server: {startEx.Message}");
+
+                        // On last attempt, just fail
+                        if (attempt == 2)
+                        {
+                            Debug.WriteLine("All server start attempts failed");
+                            StatusMessage = "Preview unavailable - server issue";
+                            IsPreviewAvailable = false;
+                            OnPropertyChanged(nameof(IsPreviewAvailable));
+                            return;
+                        }
+
+                        // Otherwise wait and retry
+                        await Task.Delay(500 * (attempt + 1));
+                    }
+                }
+
+                if (!serverStarted)
+                {
+                    Debug.WriteLine("Failed to start visualization server after retries");
+                    IsPreviewAvailable = false;
+                    OnPropertyChanged(nameof(IsPreviewAvailable));
+                    return;
                 }
 
                 // Ensure the preview template is available
-                await visualizationService.EnsureOBSPreviewTemplateAvailableAsync();
+                try
+                {
+                    await visualizationService.EnsureOBSPreviewTemplateAvailableAsync();
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error preparing preview template: {ex.Message}");
+                    // Continue anyway - template might already exist
+                }
 
-                // Set the preview URL
-                PreviewUrl = visualizationService.GetPreviewUrl();
-                IsPreviewAvailable = true;
+                // Add a timestamp to force refresh
+                string timestamp = DateTime.Now.Ticks.ToString();
+                PreviewUrl = $"{visualizationService.VisualisationUrl}/obs_preview.html?refresh={timestamp}";
 
-                // Check if virtual camera is active
+                // Update UI state
+                IsPreviewAvailable = obsService.IsConnected && serverStarted;
+
+                Debug.WriteLine($"Preview URL set to: {PreviewUrl}, IsPreviewAvailable: {IsPreviewAvailable}");
+
+                // Check virtual camera status
                 await CheckVirtualCameraStatusAsync();
+
+                OnPropertyChanged(nameof(PreviewUrl));
+                OnPropertyChanged(nameof(IsPreviewAvailable));
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error setting up preview: {ex.Message}";
+                Debug.WriteLine($"Error setting up preview: {ex.Message}");
+                StatusMessage = $"Preview setup error";
                 IsPreviewAvailable = false;
+                OnPropertyChanged(nameof(IsPreviewAvailable));
             }
         }
 
@@ -984,30 +1128,64 @@ namespace NeuroSpectator.PageModels
                 {
                     StatusMessage = "OBS is not connected";
                     await RefreshObsInfoAsync();
+                    LogDiagnostics();
                     return;
                 }
 
                 Debug.WriteLine($"Virtual Camera: Current state is {IsVirtualCameraActive}");
 
-                if (IsVirtualCameraActive)
+                bool success = false;
+
+                try
                 {
-                    // Stop virtual camera
-                    Debug.WriteLine("Virtual Camera: Attempting to stop");
-                    await obsService.StopVirtualCameraAsync();
-                    IsVirtualCameraActive = false;
-                    StatusMessage = "Virtual camera stopped";
+                    if (IsVirtualCameraActive)
+                    {
+                        // Stop virtual camera
+                        Debug.WriteLine("Virtual Camera: Attempting to stop");
+                        await obsService.StopVirtualCameraAsync();
+                        success = true;
+                    }
+                    else
+                    {
+                        // Start virtual camera
+                        Debug.WriteLine("Virtual Camera: Attempting to start");
+                        await obsService.StartVirtualCameraAsync();
+                        success = true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Virtual camera operation failed: {ex.Message}");
+                    success = false;
+                }
+
+                if (success)
+                {
+                    // Toggle the state manually
+                    IsVirtualCameraActive = !IsVirtualCameraActive;
+                    StatusMessage = IsVirtualCameraActive ? "Virtual camera started" : "Virtual camera stopped";
                 }
                 else
                 {
-                    // Start virtual camera
-                    Debug.WriteLine("Virtual Camera: Attempting to start");
-                    await obsService.StartVirtualCameraAsync();
-                    IsVirtualCameraActive = true;
-                    StatusMessage = "Virtual camera started";
+                    // State might be inconsistent, refresh from OBS
+                    bool actualState = await obsService.IsVirtualCameraActiveAsync();
+                    IsVirtualCameraActive = actualState;
+                    StatusMessage = $"Virtual camera is {(actualState ? "active" : "inactive")}";
                 }
 
-                // Refresh the preview to show the camera status
-                PreviewUrl = $"{visualizationService.GetPreviewUrl()}?refresh={DateTime.Now.Ticks}";
+                // Add a delay to allow camera state to update
+                await Task.Delay(1000);
+
+                // Try to refresh preview but handle failure gracefully
+                try
+                {
+                    await SetupVirtualCameraPreviewAsync();
+                }
+                catch
+                {
+                    // Preview refresh failed, but camera might still be working
+                    Debug.WriteLine("Preview refresh failed after camera toggle");
+                }
 
                 // Force UI to update the button state
                 OnPropertyChanged(nameof(IsVirtualCameraActive));
@@ -1060,58 +1238,50 @@ namespace NeuroSpectator.PageModels
         private async Task StartStreamAsync()
         {
             // Prevent multiple attempts while already processing
-            if (IsLive || IsStartingStream)
+            if (IsLive || StreamStartState != StreamStartStateType.Ready)
+            {
+                Debug.WriteLine($"Cannot start stream: IsLive={IsLive}, StreamStartState={StreamStartState}");
                 return;
+            }
 
             try
             {
+                Debug.WriteLine("StartStreamAsync: Beginning stream start process");
                 // Update UI to show starting state
-                IsStartingStream = true;
+                StreamStartState = StreamStartStateType.StartingUp;
+                Debug.WriteLine($"StreamStartState updated to: {StreamStartState}");
+                OnPropertyChanged(nameof(StreamStartState));
+                OnPropertyChanged(nameof(StreamButtonText));
+                OnPropertyChanged(nameof(StreamButtonColor));
+                OnPropertyChanged(nameof(CanStartStream));
                 StatusMessage = "Preparing to start stream...";
-                UpdateStartStreamButtonText("Starting...");
 
-                // Check if OBS is connected
+                // Check prerequisites
                 if (!obsService.IsConnected)
                 {
                     StatusMessage = "OBS is not connected";
-                    IsStartingStream = false;
-                    UpdateStartStreamButtonText("Start Failed");
+                    StreamStartState = StreamStartStateType.Failed;
+                    await ResetButtonStateAfterDelay();
                     return;
                 }
 
-                // Check if a BCI device is connected
-                await RefreshDeviceConnectionStatusAsync();
                 if (!IsDeviceConnected)
                 {
                     StatusMessage = "No BCI device connected";
-                    IsStartingStream = false;
-                    UpdateStartStreamButtonText("Start Failed");
+                    StreamStartState = StreamStartStateType.Failed;
+                    await ResetButtonStateAfterDelay();
                     return;
                 }
 
                 // Create a new stream in MK.IO
                 try
                 {
-                    // MANDATORY FIRST STEP: Reset the streaming service - this is critical to success
-                    StatusMessage = "Resetting streaming service...";
-                    UpdateStartStreamButtonText("Resetting...");
+                    // Reset the streaming service
+                    await streamingService.ResetStatusAsync();
+                    await Task.Delay(1000);
 
-                    try
-                    {
-                        await streamingService.ResetStatusAsync();
-                        // Add a larger delay to ensure reset has fully taken effect
-                        await Task.Delay(2000);
-                    }
-                    catch (Exception ex)
-                    {
-                        // Log but continue - we'll try anyway
-                        Debug.WriteLine($"Error resetting streaming service: {ex.Message}");
-                    }
-
-                    // Use the current title and game as the stream details
-                    StatusMessage = "Creating stream on MK.IO...";
-                    UpdateStartStreamButtonText("Creating Stream...");
-
+                    // Create stream
+                    StatusMessage = "Creating stream...";
                     var stream = await streamingService.CreateStreamAsync(
                         StreamTitle,
                         $"NeuroSpectator stream with brain data visualization for {GameCategory}",
@@ -1119,311 +1289,182 @@ namespace NeuroSpectator.PageModels
                         new List<string> { "NeuroSpectator", "BrainData", GameCategory }
                     );
 
-                    // Update the UI with the stream information
-                    if (stream != null)
+                    // Verify stream info
+                    if (stream == null || string.IsNullOrEmpty(stream.IngestUrl) || string.IsNullOrEmpty(stream.StreamKey))
                     {
-                        // Verify we have the necessary information
-                        if (string.IsNullOrEmpty(stream.IngestUrl) || string.IsNullOrEmpty(stream.StreamKey))
-                        {
-                            StatusMessage = "Error: Missing stream URL or key";
-                            IsStartingStream = false;
-                            UpdateStartStreamButtonText("Start Failed");
-                            return;
-                        }
-
-                        // Show stream details
-                        StatusMessage = "Stream created successfully!";
-
-                        // Configure OBS with the streaming settings
-                        StatusMessage = "Configuring OBS stream settings...";
-                        UpdateStartStreamButtonText("Configuring OBS...");
-                        await obsService.SetStreamSettingsAsync(stream.IngestUrl, stream.StreamKey);
-
-                        // Start the MK.IO live event
-                        StatusMessage = "Starting MK.IO live event...";
-                        UpdateStartStreamButtonText("Starting MK.IO...");
-
-                        // IMPORTANT: Make sure to start the MK.IO stream first
-                        await streamingService.StartStreamingAsync(stream.Id);
-
-                        // Show information to user while waiting for event to start
-                        await Shell.Current.DisplayAlert(
-                            "Live Event Created",
-                            $"RTMP Stream has been created!\n\nServer: {stream.IngestUrl}\nStream Key: {stream.StreamKey}\n\nWaiting for the live event to start...",
-                            "OK"
-                        );
-
-                        // Wait for the live event to become active
-                        StatusMessage = "Waiting for live event to become active...";
-                        UpdateStartStreamButtonText("Waiting for Live...");
-
-                        bool isLiveEventRunning = false;
-                        int retryCount = 0;
-                        // Use longer polling intervals and more retries
-                        // Check every 10 seconds for up to 2 minutes (12 retries)
-                        const int checkIntervalMs = 10000; // 10 seconds
-                        const int maxRetries = 12; // 2 minutes total
-
-                        // Create progress indicator in status message
-                        var progressTimer = new System.Timers.Timer(500); // Update every 500ms
-                        int dots = 0;
-
-                        progressTimer.Elapsed += (s, e) => {
-                            dots = (dots + 1) % 4; // Cycle through 0-3 dots
-                            MainThread.BeginInvokeOnMainThread(() => {
-                                StatusMessage = $"Waiting for live event to become active{new string('.', dots)}";
-                                UpdateStartStreamButtonText($"Waiting{new string('.', dots)}");
-                            });
-                        };
-
-                        progressTimer.Start();
-
-                        try
-                        {
-                            while (!isLiveEventRunning && retryCount < maxRetries)
-                            {
-                                // Poll the live event status
-                                try
-                                {
-                                    var updatedStream = await streamingService.GetStreamAsync(stream.Id);
-                                    isLiveEventRunning = updatedStream.IsLive;
-
-                                    if (isLiveEventRunning)
-                                    {
-                                        Debug.WriteLine("Live event is now active!");
-                                        break;
-                                    }
-                                    else
-                                    {
-                                        Debug.WriteLine($"Live event check #{retryCount + 1}: Not active yet");
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    Debug.WriteLine($"Error checking live event status: {ex.Message}");
-                                    // Continue trying despite error
-                                }
-
-                                // Wait 10 seconds before checking again
-                                await Task.Delay(checkIntervalMs);
-                                retryCount++;
-                            }
-                        }
-                        finally
-                        {
-                            progressTimer.Stop();
-                            progressTimer.Dispose();
-                        }
-
-                        if (!isLiveEventRunning)
-                        {
-                            StatusMessage = "Live event failed to start within timeout period";
-                            IsStartingStream = false;
-                            UpdateStartStreamButtonText("Start Failed");
-
-                            // Roll back - stop the stream that couldn't fully start
-                            try
-                            {
-                                await streamingService.StopStreamingAsync(stream.Id);
-                            }
-                            catch (Exception ex)
-                            {
-                                Debug.WriteLine($"Error stopping failed stream: {ex.Message}");
-                            }
-
-                            // Reset the streaming service again
-                            await streamingService.ResetStatusAsync();
-
-                            return;
-                        }
-
-                        // Live event is now running - but we need to verify the RTMP endpoint is ready
-                        StatusMessage = "Live event is active! Validating RTMP endpoint...";
-                        UpdateStartStreamButtonText("Validating RTMP...");
-
-                        // Create new progress timer for RTMP validation
-                        progressTimer = new System.Timers.Timer(500); // Update every 500ms
-                        dots = 0;
-
-                        progressTimer.Elapsed += (s, e) => {
-                            dots = (dots + 1) % 4; // Cycle through 0-3 dots
-                            MainThread.BeginInvokeOnMainThread(() => {
-                                StatusMessage = $"Validating RTMP endpoint{new string('.', dots)}";
-                                UpdateStartStreamButtonText($"Validating{new string('.', dots)}");
-                            });
-                        };
-
-                        progressTimer.Start();
-
-                        try
-                        {
-                            // Try to validate the RTMP endpoint is ready
-                            bool isRtmpEndpointReady = false;
-                            retryCount = 0;
-                            const int rtmpCheckMaxRetries = 10;
-                            const int rtmpCheckIntervalMs = 5000; // 5 seconds
-
-                            while (!isRtmpEndpointReady && retryCount < rtmpCheckMaxRetries)
-                            {
-                                try
-                                {
-                                    // For MVP, we'll just add a delay - in a real implementation, we'd actually check the endpoint
-                                    // isRtmpEndpointReady = await IsRtmpEndpointReadyAsync(stream.IngestUrl);
-
-                                    // For now, add a delay to give the RTMP endpoint time to become ready
-                                    await Task.Delay(rtmpCheckIntervalMs);
-
-                                    // Since we can't actually check the RTMP endpoint directly,
-                                    // we'll assume it's ready after the first retry
-                                    isRtmpEndpointReady = true;
-
-                                    if (isRtmpEndpointReady)
-                                    {
-                                        Debug.WriteLine("RTMP endpoint is now ready!");
-                                        break;
-                                    }
-                                    else
-                                    {
-                                        Debug.WriteLine($"RTMP endpoint check #{retryCount + 1}: Not ready yet");
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    Debug.WriteLine($"Error checking RTMP endpoint: {ex.Message}");
-                                    // Continue trying despite error
-                                }
-
-                                retryCount++;
-                            }
-
-                            if (!isRtmpEndpointReady)
-                            {
-                                StatusMessage = "RTMP endpoint failed to become ready within timeout period";
-                                IsStartingStream = false;
-                                UpdateStartStreamButtonText("Start Failed");
-
-                                // Don't roll back the stream, as the live event is running
-                                // Just don't start OBS streaming
-                                return;
-                            }
-                        }
-                        finally
-                        {
-                            progressTimer.Stop();
-                            progressTimer.Dispose();
-                        }
-
-                        // RTMP endpoint is ready - start OBS streaming
-                        StatusMessage = "RTMP endpoint ready! Starting OBS streaming...";
-                        UpdateStartStreamButtonText("Starting OBS...");
-
-                        try
-                        {
-                            bool obsStartSuccess = await obsService.ToggleStreamingAsync();
-
-                            if (!obsStartSuccess)
-                            {
-                                // OBS streaming failed to start
-                                StatusMessage = "Error starting OBS stream - please start it manually";
-                                // Don't set IsStartingStream to false yet - we'll still continue with the rest of the setup
-                            }
-                            else
-                            {
-                                StatusMessage = "OBS streaming started successfully";
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.WriteLine($"Error starting OBS stream: {ex.Message}");
-                            StatusMessage = $"Error starting OBS stream: {ex.Message}";
-                            // Continue anyway - the MK.IO stream is running
-                        }
-
-                        // Create the BrainDataOBSHelper now that we have a connected device
-                        try
-                        {
-                            // We'll create this using the service provider to ensure all dependencies are properly resolved
-                            brainDataObsHelper = MauiProgram.Services.GetService<BrainDataOBSHelper>();
-
-                            if (brainDataObsHelper != null)
-                            {
-                                // Subscribe to brain data events
-                                brainDataObsHelper.BrainMetricsUpdated += OnBrainMetricsUpdated;
-                                brainDataObsHelper.SignificantBrainEventDetected += OnSignificantBrainEventDetected;
-                                brainDataObsHelper.ErrorOccurred += OnBrainDataError;
-
-                                // Start brain data monitoring
-                                await brainDataObsHelper.StartMonitoringAsync(true);
-                                StatusMessage = "Brain data monitoring started";
-                            }
-                            else
-                            {
-                                StatusMessage = "Failed to initialize brain data helper";
-                                // Continue anyway - this isn't critical to the stream
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            StatusMessage = $"Error initializing brain data: {ex.Message}";
-                            // Continue anyway - this isn't critical to the stream
-                        }
-
-                        // Start the stream timer
-                        streamStartTime = DateTime.Now;
-                        streamTimer.Start();
-                        UpdateStreamTimeDisplay();
-
-                        // Set status
-                        StatusMessage = "Stream started successfully";
-                        IsLive = true;
-
-                        // Show a success message
-                        await Shell.Current.DisplayAlert(
-                            "Stream Started",
-                            "Your stream has been started successfully!",
-                            "OK"
-                        );
+                        StatusMessage = "Error: Failed to create stream";
+                        StreamStartState = StreamStartStateType.Failed;
+                        await ResetButtonStateAfterDelay();
+                        return;
                     }
-                    else
+
+                    // Configure OBS
+                    StatusMessage = "Configuring OBS...";
+                    await obsService.SetStreamSettingsAsync(stream.IngestUrl, stream.StreamKey);
+
+                    // Start MK.IO live event
+                    StatusMessage = "Starting stream service...";
+                    await streamingService.StartStreamingAsync(stream.Id);
+
+                    // Wait for live event to become active
+                    bool isLiveEventRunning = await WaitForLiveEventToStartAsync(stream.Id);
+                    if (!isLiveEventRunning)
                     {
-                        StatusMessage = "Failed to create stream";
-                        UpdateStartStreamButtonText("Start Failed");
+                        StatusMessage = "Stream service timed out";
+                        StreamStartState = StreamStartStateType.Failed;
+                        await CleanupFailedStreamAsync(stream.Id);
+                        return;
                     }
+
+                    // Live event is active - transition to finalizing
+                    StreamStartState = StreamStartStateType.Finalizing;
+                    OnPropertyChanged(nameof(StreamStartState));
+                    OnPropertyChanged(nameof(StreamButtonText));
+                    OnPropertyChanged(nameof(StreamButtonColor));
+                    StatusMessage = "Finalizing stream setup...";
+
+                    // Add a brief delay to simulate RTMP validation
+                    await Task.Delay(3000);
+
+                    // Start OBS streaming
+                    StatusMessage = "Starting broadcast...";
+                    try
+                    {
+                        await obsService.StartStreamingAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Error starting OBS stream: {ex.Message}");
+                        StatusMessage = "Broadcast started with warnings";
+                    }
+
+                    // Setup brain data monitoring
+                    await SetupBrainDataMonitoringAsync();
+
+                    // Start stream timer
+                    streamStartTime = DateTime.Now;
+                    streamTimer.Start();
+                    UpdateStreamTimeDisplay();
+
+                    // Stream is now live
+                    StatusMessage = "Stream started successfully";
+                    IsLive = true;
                 }
                 catch (Exception ex)
                 {
-                    StatusMessage = $"Error creating MK.IO stream: {ex.Message}";
-                    UpdateStartStreamButtonText("Start Failed");
-
+                    StatusMessage = $"Error: Could not start stream";
+                    Debug.WriteLine($"Stream creation error: {ex.Message}");
+                    StreamStartState = StreamStartStateType.Failed;
+                    OnPropertyChanged(nameof(StreamStartState));
+                    OnPropertyChanged(nameof(StreamButtonText));
+                    OnPropertyChanged(nameof(StreamButtonColor));
                     // Try to reset the streaming service
-                    try
-                    {
-                        await streamingService.ResetStatusAsync();
-                    }
-                    catch
-                    {
-                        // Ignore errors during cleanup
-                    }
+                    try { await streamingService.ResetStatusAsync(); } catch { }
+
+                    await ResetButtonStateAfterDelay();
                 }
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error starting stream: {ex.Message}";
-                UpdateStartStreamButtonText("Start Failed");
+                StatusMessage = $"Error starting stream";
+                Debug.WriteLine($"ERROR in StartStreamAsync: {ex.Message}");
+                StreamStartState = StreamStartStateType.Failed;
+                OnPropertyChanged(nameof(StreamStartState));
+                OnPropertyChanged(nameof(StreamButtonText));
+                OnPropertyChanged(nameof(StreamButtonColor));
+                await ResetButtonStateAfterDelay();
             }
-            finally
-            {
-                // Always reset the starting flag, but keep button text if there was an error
-                IsStartingStream = false;
+        }
 
-                // Schedule a reset of the button text after a delay if it shows an error
-                if (StartStreamButtonText.Contains("Failed"))
+        private void ResetStreamButtonState()
+        {
+            StreamStartState = StreamStartStateType.Ready;
+            // Force UI update with explicit property notifications
+            OnPropertyChanged(nameof(StreamStartState));
+            OnPropertyChanged(nameof(StreamButtonText));
+            OnPropertyChanged(nameof(StreamButtonColor));
+            OnPropertyChanged(nameof(CanStartStream));
+        }
+
+        // Helper method to reset button state after a delay
+        private async Task ResetButtonStateAfterDelay(int delayMs = 3000)
+        {
+            await Task.Delay(delayMs);
+            ResetStreamButtonState();
+        }
+
+        // Helper method to wait for live event to start
+        private async Task<bool> WaitForLiveEventToStartAsync(string streamId)
+        {
+            bool isLiveEventRunning = false;
+            int retryCount = 0;
+            const int checkIntervalMs = 10000; // 10 seconds
+            const int maxRetries = 12; // 2 minutes total
+
+            while (!isLiveEventRunning && retryCount < maxRetries)
+            {
+                try
                 {
-                    MainThread.BeginInvokeOnMainThread(async () => {
-                        await Task.Delay(3000);
-                        UpdateStartStreamButtonText("Start Stream");
-                    });
+                    var updatedStream = await streamingService.GetStreamAsync(streamId);
+                    isLiveEventRunning = updatedStream.IsLive;
+
+                    if (isLiveEventRunning)
+                        break;
                 }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error checking live event status: {ex.Message}");
+                }
+
+                await Task.Delay(checkIntervalMs);
+                retryCount++;
+            }
+
+            return isLiveEventRunning;
+        }
+
+        // Helper method to clean up a failed stream
+        private async Task CleanupFailedStreamAsync(string streamId)
+        {
+            try
+            {
+                await streamingService.StopStreamingAsync(streamId);
+            }
+            catch
+            {
+                // Ignore errors during cleanup 
+            }
+
+            try
+            {
+                await streamingService.ResetStatusAsync();
+            }
+            catch
+            {
+                // Ignore errors during cleanup 
+            }
+
+            await ResetButtonStateAfterDelay();
+        }
+
+        // Helper method to set up brain data monitoring
+        private async Task SetupBrainDataMonitoringAsync()
+        {
+            try
+            {
+                brainDataObsHelper = MauiProgram.Services.GetService<BrainDataOBSHelper>();
+                if (brainDataObsHelper != null)
+                {
+                    brainDataObsHelper.BrainMetricsUpdated += OnBrainMetricsUpdated;
+                    brainDataObsHelper.SignificantBrainEventDetected += OnSignificantBrainEventDetected;
+                    brainDataObsHelper.ErrorOccurred += OnBrainDataError;
+                    await brainDataObsHelper.StartMonitoringAsync(true);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error initializing brain data: {ex.Message}");
+                // Continue anyway - this isn't critical to the stream
             }
         }
 
@@ -1873,7 +1914,7 @@ namespace NeuroSpectator.PageModels
 
                     // Refresh OBS info
                     await RefreshObsInfoAsync();
-
+                    LogDiagnostics();
                     // Update UI
                     OnPropertyChanged(nameof(IsSetupComplete));
                 }
@@ -1929,18 +1970,31 @@ namespace NeuroSpectator.PageModels
         /// </summary>
         private void OnObsConnectionStatusChanged(object sender, bool connected)
         {
+            Debug.WriteLine($"OBS connection status changed to: {connected}");
             IsConnectedToObs = connected;
 
             if (connected)
             {
                 StatusMessage = "Connected to OBS";
-                // Refresh OBS info
-                MainThread.BeginInvokeOnMainThread(async () => await RefreshObsInfoAsync());
+                // When OBS connects, refresh preview immediately
+                MainThread.BeginInvokeOnMainThread(async () => {
+                    await RefreshObsInfoAsync();
+                    LogDiagnostics();
+                    // Explicitly refresh the preview
+                    await SetupVirtualCameraPreviewAsync();
+                });
             }
             else
             {
                 StatusMessage = "Disconnected from OBS";
+                // When OBS disconnects, hide the preview
+                IsPreviewAvailable = false;
             }
+
+            // Ensure UI state is updated
+            OnPropertyChanged(nameof(IsConnectedToObs));
+            OnPropertyChanged(nameof(IsPreviewAvailable));
+            OnPropertyChanged(nameof(CanStartStream));
         }
 
         /// <summary>
@@ -2068,6 +2122,45 @@ namespace NeuroSpectator.PageModels
 
                 UpdateStartStreamButtonText(basePart);
             }
+        }
+
+        private void OnWebViewNavigated(WebNavigatedEventArgs args)
+        {
+            Debug.WriteLine($"WebView navigated to {args.Url} with result: {args.Result}");
+
+            // Update status if navigation fails
+            if (args.Result != WebNavigationResult.Success)
+            {
+                StatusMessage = $"Preview failed to load: {args.Result}";
+            }
+        }
+
+        private void LogDiagnostics()
+        {
+            Debug.WriteLine("DIAGNOSTICS:");
+            Debug.WriteLine($"  IsConnectedToObs: {IsConnectedToObs}");
+            Debug.WriteLine($"  IsDeviceConnected: {IsDeviceConnected}");
+            Debug.WriteLine($"  IsLive: {IsLive}");
+            Debug.WriteLine($"  StreamStartState: {StreamStartState}");
+            Debug.WriteLine($"  CanStartStream: {CanStartStream}");
+            Debug.WriteLine($"  IsPreviewAvailable: {IsPreviewAvailable}");
+            Debug.WriteLine($"  IsVirtualCameraActive: {IsVirtualCameraActive}");
+        }
+
+        private async Task ForceUIRefresh()
+        {
+            // Force UI refresh of critical properties
+            OnPropertyChanged(nameof(CanStartStream));
+            OnPropertyChanged(nameof(IsConnectedToObs));
+            OnPropertyChanged(nameof(IsDeviceConnected));
+            OnPropertyChanged(nameof(StreamStartState));
+            OnPropertyChanged(nameof(StreamButtonText));
+            OnPropertyChanged(nameof(StreamButtonColor));
+
+            // Force layout refresh on main thread
+            await MainThread.InvokeOnMainThreadAsync(() => {
+                LogDiagnostics();
+            });
         }
         #endregion
     }

@@ -18,6 +18,7 @@ namespace NeuroSpectator.Services.Streaming
         private readonly string subscriptionName;
         private readonly string apiToken;
         private readonly string storageName;
+        private readonly string licenseKey;
 
         // Stream naming conventions
         private const string StreamPrefix = "ns";
@@ -51,11 +52,17 @@ namespace NeuroSpectator.Services.Streaming
         public string StorageName => storageName;
 
         /// <summary>
+        /// Gets the MK.IO license key
+        /// </summary>
+        public string LicenseKey => licenseKey;
+
+        /// <summary>
         /// Gets a value indicating whether the configuration is valid
         /// </summary>
         public bool IsValid => !string.IsNullOrEmpty(subscriptionName)
                             && !string.IsNullOrEmpty(apiToken)
-                            && !string.IsNullOrEmpty(storageName);
+                            && !string.IsNullOrEmpty(storageName)
+                            && !string.IsNullOrEmpty(licenseKey);
 
         /// <summary>
         /// Gets the default video player URL template
@@ -74,6 +81,8 @@ namespace NeuroSpectator.Services.Streaming
             Debug.WriteLine($"Loaded MKIOToken: {(string.IsNullOrEmpty(apiToken) ? "NOT FOUND" : "FOUND (token hidden)")}");
             storageName = configuration["StorageName"];
             Debug.WriteLine($"Loaded StorageName: {(string.IsNullOrEmpty(storageName) ? "NOT FOUND" : "FOUND")}");
+            licenseKey = configuration["MKIOPlayerLicenseKey"];
+            Debug.WriteLine($"Loaded MKIOPlayerLicenseKey: {(string.IsNullOrEmpty(licenseKey) ? "NOT FOUND" : "FOUND (key hidden)")}");
 
             // Initialize quality presets
             qualityPresets = new Dictionary<StreamQualityLevel, StreamQualitySettings>

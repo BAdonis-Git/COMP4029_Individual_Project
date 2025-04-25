@@ -352,13 +352,16 @@ namespace NeuroSpectator.PageModels
 
             try
             {
-                Debug.WriteLine($"Opening stream: {stream.Id}, Title: {stream.Title}");
+                Debug.WriteLine($"Preparing to navigate to stream: {stream.Id}");
 
-                // Navigation parameters
-                var queryString = $"?streamId={Uri.EscapeDataString(stream.Id)}";
+                // Create a navigation parameter dictionary
+                var navigationParameter = new Dictionary<string, object>
+        {
+            { "streamId", stream.Id }
+        };
 
-                // Navigate to the stream viewer page with the stream ID
-                await Shell.Current.GoToAsync($"//StreamSpectatorPage{queryString}");
+                // Navigate using the proper route name
+                await Shell.Current.GoToAsync(nameof(Pages.StreamSpectatorPage), navigationParameter);
             }
             catch (Exception ex)
             {
@@ -626,20 +629,6 @@ namespace NeuroSpectator.PageModels
         private async Task NavigateToDevicesAsync()
         {
             await Shell.Current.GoToAsync("//YourDevicesPage");
-        }
-
-        /// <summary>
-        /// Views a stream
-        /// </summary>
-        private async Task ViewStreamAsync(FeaturedStreamModel stream)
-        {
-            if (stream == null) return;
-
-            // In a real implementation, you would pass stream ID to the stream viewer page
-            // For now, just show a placeholder alert
-            await Shell.Current.DisplayAlert("Stream Selected",
-                $"Opening stream: {stream.Title} by {stream.StreamerName}",
-                "OK");
         }
 
         /// <summary>

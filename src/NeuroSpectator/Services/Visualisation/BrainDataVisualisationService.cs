@@ -27,6 +27,9 @@ namespace NeuroSpectator.Services.Visualisation
         private DateTime lastDataUpdateTime = DateTime.MinValue;
         private int dataPointsReceived = 0;
         private bool hasReceivedData = false;
+        private static HashSet<int> _usedPorts = new HashSet<int>();
+        private static readonly object _portLock = new object();
+        private int _serverPort;
 
         // Log of brain metrics for debugging
         private readonly Queue<DiagnosticLogEntry> metricLog = new Queue<DiagnosticLogEntry>(100); // Keep last 100 entries
@@ -108,24 +111,47 @@ namespace NeuroSpectator.Services.Visualisation
         /// </summary>
         public async Task StartServerAsync()
         {
+            // If server is already running, don't try to start it again
             if (IsServerRunning)
+            {
+                Console.WriteLine("Visualization server is already running, skipping start");
                 return;
+            }
 
             try
             {
                 // Ensure the OBS template is available
                 await EnsureOBSTemplateAvailableAsync();
-                
+
                 // Ensure the diagnostic template is available
                 await EnsureDiagnosticTemplateAvailableAsync();
 
                 // Generate initial visualisations
                 await GenerateVisualisationsAsync();
 
-                // Start the HTTP server
+                // Find an available port FIRST
+                port = FindAvailablePort();
+                baseUrl = $"http://localhost:{port}";
+
+                // Start the HTTP server AFTER port is confirmed available
                 httpListener = new HttpListener();
                 httpListener.Prefixes.Add($"{baseUrl}/");
-                httpListener.Start();
+
+                try
+                {
+                    httpListener.Start();
+                }
+                catch (HttpListenerException ex)
+                {
+                    Console.WriteLine($"Could not start HTTP listener on port {port}: {ex.Message}");
+                    // Remove from used ports registry since we couldn't use it
+                    lock (_portLock)
+                    {
+                        if (_usedPorts.Contains(port))
+                            _usedPorts.Remove(port);
+                    }
+                    throw; // Re-throw to signal caller
+                }
 
                 serverCancellationToken = new CancellationTokenSource();
 
@@ -152,16 +178,26 @@ namespace NeuroSpectator.Services.Visualisation
             try
             {
                 serverCancellationToken?.Cancel();
+
+                // Important: Wait a moment before closing the listener
+                await Task.Delay(200);
+
                 httpListener.Stop();
                 httpListener.Close();
                 httpListener = null;
 
-                await Task.CompletedTask; // For async pattern consistency
+                // Release the port from our registry
+                lock (_portLock)
+                {
+                    if (_serverPort > 0 && _usedPorts.Contains(_serverPort))
+                        _usedPorts.Remove(_serverPort);
+                }
+
+                await Task.CompletedTask;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error stopping visualisation server: {ex.Message}");
-                throw;
+                Console.WriteLine($"Error stopping visualization server: {ex.Message}");
             }
         }
 
@@ -435,11 +471,36 @@ namespace NeuroSpectator.Services.Visualisation
         /// </summary>
         private int FindAvailablePort()
         {
-            var listener = new TcpListener(IPAddress.Loopback, 0);
-            listener.Start();
-            var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-            listener.Stop();
-            return port;
+            // Use a higher port range to avoid conflicts with MKIOPlayer (which uses 8080)
+            // Start at 9000 to be well clear of the MKIOPlayer port
+            for (int testPort = 9000; testPort < 9100; testPort++)
+            {
+                lock (_portLock)
+                {
+                    // Skip if port is already in our registry
+                    if (_usedPorts.Contains(testPort))
+                        continue;
+
+                    var listener = new TcpListener(IPAddress.Loopback, testPort);
+                    try
+                    {
+                        listener.Start();
+                        listener.Stop();
+                        // Port is available, register it
+                        _usedPorts.Add(testPort);
+                        _serverPort = testPort;
+                        Console.WriteLine($"BrainDataVisualizationService: Selected port {testPort}");
+                        return testPort;
+                    }
+                    catch
+                    {
+                        // Port unavailable, continue to next
+                    }
+                }
+            }
+
+            // If all ports are taken, throw exception to fail gracefully
+            throw new InvalidOperationException("Could not find any available port in range 9000-9100");
         }
 
         /// <summary>
