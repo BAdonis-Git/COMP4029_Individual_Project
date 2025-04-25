@@ -390,6 +390,33 @@ namespace NeuroSpectator.Services.BCI
         }
 
         /// <summary>
+        /// Handles cases where device configuration is missing or unavailable
+        /// </summary>
+        internal void HandleMissingConfiguration(IBCIDevice device)
+        {
+            try
+            {
+                Debug.WriteLine($"Handling missing configuration for device {device.Name}");
+
+                // Add to connected devices list anyway
+                if (!connectedDevices.ContainsKey(device.DeviceId))
+                {
+                    connectedDevices[device.DeviceId] = device;
+                    AddLogEntry(new DeviceConnectionInfo(device, "Connected (limited capabilities)", DateTime.Now));
+                    RaiseDeviceConnected(device);
+                    ConnectionStatus = DeviceConnectionStatus.Connected;
+                }
+
+                // Notify with a warning
+                NotifyDeviceWarning(device, "Limited device capabilities - configuration unavailable");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error handling missing configuration: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Called when a device is reconnecting
         /// </summary>
         internal void NotifyReconnecting(IBCIDevice device)
