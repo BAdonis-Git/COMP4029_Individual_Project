@@ -11,6 +11,11 @@
 
     <ContentPage.Resources>
         <utilities:ZeroValueConverter x:Key="ZeroConverter" />
+        <utilities:StreamHealthColorConverter x:Key="StreamHealthColorConverter" />
+        <utilities:WaveLevelColorConverter x:Key="WaveLevelColorConverter" />
+        <utilities:PercentageConverter x:Key="PercentageConverter" />
+        <utilities:StreamingButtonColorConverter x:Key="StreamingButtonColorConverter" />
+
         <Style x:Key="HeaderLabelStyle" TargetType="Label">
             <Setter Property="FontSize" Value="20"/>
             <Setter Property="TextColor" Value="#CCCCCC"/>
@@ -73,6 +78,33 @@
             <Setter Property="Margin" Value="5"/>
         </Style>
 
+        <Style x:Key="DisabledButtonStyle" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="#555555"/>
+            <Setter Property="TextColor" Value="#AAAAAA"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Margin" Value="5"/>
+        </Style>
+
+        <Style x:Key="ConnectedTagStyle" TargetType="Label">
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="BackgroundColor" Value="#4CAF50"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="HorizontalOptions" Value="Start"/>
+        </Style>
+
+        <Style x:Key="DisconnectedTagStyle" TargetType="Label">
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="BackgroundColor" Value="#FF5252"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="HorizontalOptions" Value="Start"/>
+        </Style>
+
         <Style x:Key="ChatMessageStyle" TargetType="Label">
             <Setter Property="TextColor" Value="#CCCCCC"/>
             <Setter Property="FontSize" Value="14"/>
@@ -83,91 +115,284 @@
     <Grid RowDefinitions="Auto,*,Auto" ColumnDefinitions="2*,*">
         <!-- Top Controls -->
         <Grid Grid.Row="0" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*,Auto">
-            <!-- Stream Status -->
-            <Label Grid.Column="0" 
-                   Text="Stream Status:" 
-                   VerticalOptions="Center"
-                   TextColor="#AAAAAA" 
-                   FontSize="16"
-                   Margin="15,10"/>
+            <!-- OBS Connection Status and Setup -->
+            <Grid Grid.Column="0" Margin="10,0">
+                <VerticalStackLayout>
+                    <Label Text="Stream Status:" TextColor="#AAAAAA" FontSize="14" HorizontalOptions="End"/>
+                    <Label IsVisible="{Binding IsLive}" Text="LIVE" Style="{StaticResource LiveTagStyle}" HorizontalOptions="End" Margin="0,5,0,0"/>
+                    <Label IsVisible="{Binding IsLive, Converter={StaticResource ZeroConverter}}" Text="OFFLINE" TextColor="#AAAAAA" FontSize="14" HorizontalOptions="End" Margin="0,5,0,0"/>
+                    <!-- Start Stream Button - should be visible when not streaming -->
+                    <Button IsVisible="{Binding IsLive, Converter={StaticResource ZeroConverter}}" 
+                        Command="{Binding StartStreamCommand}" 
+                        IsEnabled="{Binding IsStartingStream, Converter={StaticResource ZeroConverter}}"
+                        BackgroundColor="{Binding IsStartingStream, Converter={StaticResource StreamingButtonColorConverter}}"
+                        Text="{Binding StartStreamButtonText}" 
+                        Style="{StaticResource PrimaryButtonStyle}" 
+                        HorizontalOptions="End" 
+                        Margin="0,5,0,0">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button"
+                                 Binding="{Binding IsStartingStream}"
+                                 Value="True">
+                                <Setter Property="BackgroundColor" Value="#7B61B1" />
+                                <!-- Dimmed purple -->
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
+                    <!-- End Stream Button - should be visible when streaming -->
+                    <Button IsVisible="{Binding IsLive}" 
+                        Command="{Binding EndStreamCommand}" 
+                        Text="End Stream" 
+                        Style="{StaticResource DangerButtonStyle}" 
+                        HorizontalOptions="End" 
+                        Margin="0,5,0,0"/>
+                    <Button Command="{Binding ConnectToObsCommand}" Text="Connect to OBS" Style="{StaticResource PrimaryButtonStyle}" IsVisible="{Binding IsConnectedToObs, Converter={StaticResource ZeroConverter}}" Margin="0,5,0,0"/>
+                    <Button Command="{Binding DiagnoseObsCommand}" Text="Diagnose OBS" Style="{StaticResource ControlButtonStyle}" IsVisible="{Binding IsConnectedToObs, Converter={StaticResource ZeroConverter}}" Margin="0,5,0,0"/>
+                    <Button Command="{Binding RefreshObsInfoCommand}" Text="Refresh OBS Info" Style="{StaticResource ControlButtonStyle}" IsVisible="{Binding IsConnectedToObs}" Margin="0,5,0,0"/>
 
-            <Label Grid.Column="0" 
-                   Text="LIVE" 
-                   Style="{StaticResource LiveTagStyle}"
-                   VerticalOptions="Center"
-                   Margin="130,0,0,0"/>
+                    <!-- OBS Setup Options - New Section -->
+                    <VerticalStackLayout IsVisible="{Binding IsConnectedToObs}" Margin="0,10,0,0">
+                        <Label Text="OBS Setup:" TextColor="#AAAAAA" FontSize="14"/>
+                        <Button Text="Auto-Configure OBS" 
+                                Command="{Binding AutoConfigureOBSCommand}" 
+                                Style="{StaticResource PrimaryButtonStyle}" 
+                                IsVisible="{Binding IsSetupComplete, Converter={StaticResource ZeroConverter}}"
+                                IsEnabled="{Binding IsAutoConfiguringObs, Converter={StaticResource ZeroConverter}}" 
+                                Margin="0,5,0,0"/>
+                        <Button Text="Setup in Progress..." 
+                                Style="{StaticResource DisabledButtonStyle}" 
+                                IsVisible="{Binding IsAutoConfiguringObs}" 
+                                IsEnabled="False" 
+                                Margin="0,5,0,0"/>
+                        <Button Text="OBS Setup Guide" 
+                                Command="{Binding ShowOBSSetupGuideCommand}" 
+                                Style="{StaticResource ControlButtonStyle}" 
+                                Margin="0,5,0,0"/>
+                        <Label Text="✓ OBS Configured" 
+                               TextColor="#92D36E" 
+                               FontAttributes="Bold" 
+                               IsVisible="{Binding IsSetupComplete}" 
+                               Margin="0,5,0,0"/>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Grid>
 
             <!-- Stream Title -->
-            <Label Grid.Column="1" 
-                   Text="{Binding StreamTitle}" 
-                   VerticalOptions="Center"
-                   HorizontalOptions="Center"
-                   TextColor="White" 
-                   FontSize="18" 
-                   FontAttributes="Bold"/>
+            <StackLayout Grid.Column="1" HorizontalOptions="Center" VerticalOptions="Center">
+                <Label Text="{Binding StreamTitle}" TextColor="White" FontSize="18" FontAttributes="Bold" HorizontalOptions="Center"/>
+                <Label Text="{Binding GameCategory}" TextColor="#AAAAAA" FontSize="14" HorizontalOptions="Center"/>
+                <Label Text="{Binding StreamTimeDisplay}" TextColor="#B388FF" FontSize="20" FontAttributes="Bold" HorizontalOptions="Center" IsVisible="{Binding IsLive}"/>
+            </StackLayout>
 
-            <!-- Close Button -->
-            <Button Grid.Column="2" 
-                    Text="End Stream" 
-                    Style="{StaticResource DangerButtonStyle}"
-                    Command="{Binding EndStreamCommand}"
-                    VerticalOptions="Center"
-                    Margin="10"/>
+            <!-- Stream Control Buttons -->
+            <VerticalStackLayout Grid.Column="2" HorizontalOptions="End" Margin="10,0">
+                <Label Text="Stream Status:" TextColor="#AAAAAA" FontSize="14" HorizontalOptions="End"/>
+                <Label IsVisible="{Binding IsLive}" Text="LIVE" Style="{StaticResource LiveTagStyle}" HorizontalOptions="End" Margin="0,5,0,0"/>
+                <Label IsVisible="{Binding IsLive, Converter={StaticResource ZeroConverter}}" Text="OFFLINE" TextColor="#AAAAAA" FontSize="14" HorizontalOptions="End" Margin="0,5,0,0"/>
+                <Button IsVisible="{Binding IsLive, Converter={StaticResource ZeroConverter}}" Command="{Binding StartStreamCommand}" Text="Start Stream" Style="{StaticResource PrimaryButtonStyle}" HorizontalOptions="End" Margin="0,5,0,0"/>
+                <Button IsVisible="{Binding IsLive}" Command="{Binding EndStreamCommand}" Text="End Stream" Style="{StaticResource DangerButtonStyle}" HorizontalOptions="End" Margin="0,5,0,0"/>
+            </VerticalStackLayout>
         </Grid>
 
-        <!-- Main Content Area -->
-        <Grid Grid.Row="1" Grid.Column="0" RowDefinitions="*,Auto">
-            <!-- Stream Preview Area -->
-            <Frame Grid.Row="0" 
-                   BackgroundColor="#121212" 
-                   BorderColor="#444444" 
-                   Padding="0" 
-                   CornerRadius="5" 
-                   Margin="10">
-                <Grid>
-                    <Label Text="Stream Preview Display" 
-                           HorizontalOptions="Center" 
-                           VerticalOptions="Center" 
-                           TextColor="#AAAAAA"/>
+        <!-- Device Connection Status Section -->
+        <Frame Grid.Row="0" Grid.Column="1" Style="{StaticResource CardStyle}" Margin="5,0,5,5">
+            <Grid RowDefinitions="Auto,Auto,Auto">
+                <Label Text="Device Status:" TextColor="#AAAAAA" FontSize="14"/>
 
-                    <!-- Placeholder for gameplay preview -->
+                <StackLayout Grid.Row="1" Orientation="Horizontal" Margin="0,5,0,0">
+                    <Label IsVisible="{Binding IsDeviceConnected}" Text="CONNECTED" Style="{StaticResource ConnectedTagStyle}"/>
+                    <Label IsVisible="{Binding NoDeviceConnected}" Text="DISCONNECTED" Style="{StaticResource DisconnectedTagStyle}"/>
+                    <Label Text="{Binding ConnectedDeviceName}" TextColor="White" FontAttributes="Bold" Margin="5,0,0,0"/>
+                </StackLayout>
+
+                <StackLayout Grid.Row="2" IsVisible="{Binding IsDeviceConnected}" Orientation="Horizontal" Margin="0,5,0,0">
+                    <Label Text="Battery:" TextColor="#AAAAAA" VerticalOptions="Center"/>
+                    <Label Text="{Binding DeviceBatteryLevel, StringFormat='{0:F0}%'}" TextColor="#92D36E" FontAttributes="Bold" Margin="5,0" VerticalOptions="Center"/>
+
+                    <Label Text="Signal:" TextColor="#AAAAAA" Margin="10,0,0,0" VerticalOptions="Center"/>
+                    <Label Text="{Binding DeviceSignalQuality, StringFormat='{0:P0}'}" TextColor="#92D36E" FontAttributes="Bold" Margin="5,0" VerticalOptions="Center"/>
+                </StackLayout>
+
+                <Button Grid.Row="2" IsVisible="{Binding NoDeviceConnected}" 
+                Text="Go to Devices" 
+                Command="{Binding NavigateToDevicesCommand}" 
+                Style="{StaticResource PrimaryButtonStyle}" 
+                Margin="0,5,0,0"/>
+            </Grid>
+        </Frame>
+
+        <!-- Main Content Area -->
+        <Grid Grid.Row="1" Grid.Column="0" RowDefinitions="Auto,*,Auto">
+            <!-- OBS Scene Selection -->
+            <Grid Grid.Row="0" Margin="10" ColumnDefinitions="Auto,*">
+                <Label Grid.Column="0" Text="OBS Scene:" TextColor="#AAAAAA" FontSize="14" VerticalOptions="Center"/>
+                <Picker Grid.Column="1" 
+                        ItemsSource="{Binding AvailableScenes}" 
+                        SelectedItem="{Binding ObsScene}" 
+                        TextColor="White"
+                        BackgroundColor="#383838"
+                        HorizontalOptions="Start"
+                        WidthRequest="200"
+                        IsEnabled="{Binding IsConnectedToObs}"
+                        Margin="10,0,0,0"/>
+            </Grid>
+
+            <Frame Grid.Row="1"
+   	BackgroundColor="#121212"
+   	BorderColor="#444444"
+   	Padding="10"
+   	CornerRadius="5"
+   	Margin="10">
+                <Grid RowDefinitions="Auto,*">
+                    <Label Text="OBS Preview"
+           	HorizontalOptions="Center"
+           	TextColor="#AAAAAA"
+           	Margin="0,0,0,10"/>
+
+                    <!-- WebView for OBS Virtual Camera preview -->
+                    <Grid Grid.Row="1">
+                        <!-- Preview WebView -->
+                        <WebView Source="{Binding PreviewUrl}"
+                 	IsVisible="{Binding IsPreviewAvailable}"
+                 	VerticalOptions="FillAndExpand"
+                 	HorizontalOptions="FillAndExpand"/>
+
+                        <!-- Loading indicator -->
+                        <ActivityIndicator IsRunning="{Binding IsConnectedToObs}"
+                          	IsVisible="{Binding IsPreviewAvailable, Converter={StaticResource ZeroConverter}}"
+                          	Color="#B388FF"
+                          	VerticalOptions="Center"
+                          	HorizontalOptions="Center"/>
+
+                        <!-- Default message when OBS is not connected -->
+                        <Label Text="OBS Studio must be running with the Browser Source configured to use the NeuroSpectator visualizations"
+               	TextColor="#AAAAAA"
+               	HorizontalOptions="Center"
+               	VerticalOptions="Center"
+               	HorizontalTextAlignment="Center"
+               	IsVisible="{Binding IsConnectedToObs, Converter={StaticResource ZeroConverter}}"/>
+
+                        <!-- Permission denied message -->
+                        <Label Text="Camera permission denied. Please enable camera access to view the OBS Virtual Camera preview."
+               	TextColor="#FF5252"
+               	HorizontalOptions="Center"
+               	VerticalOptions="Center"
+               	HorizontalTextAlignment="Center"
+               	IsVisible="{Binding IsCameraPermissionDenied}"/>
+                    </Grid>
                 </Grid>
             </Frame>
 
+
             <!-- Stream Controls -->
-            <Frame Grid.Row="1" Style="{StaticResource CardStyle}">
-                <Grid ColumnDefinitions="*,*,*,*,*" RowDefinitions="Auto,Auto">
-                    <Label Text="Stream Controls" 
-                           Grid.ColumnSpan="5"
-                           Style="{StaticResource SubHeaderLabelStyle}"
-                           HorizontalOptions="Center"
-                           Margin="0,0,0,10"/>
+            <Frame Grid.Row="2" Style="{StaticResource CardStyle}">
+                <Grid ColumnDefinitions="*,*,*,*" RowDefinitions="Auto,Auto,Auto">
+                    <Label Text="Stream Controls"
+           	Grid.ColumnSpan="4"
+           	Style="{StaticResource SubHeaderLabelStyle}"
+           	HorizontalOptions="Center"
+           	Margin="0,0,0,10"/>
 
                     <!-- First Row Controls -->
                     <Button Grid.Row="1" Grid.Column="0"
-                            Text="Toggle Camera" 
-                            Style="{StaticResource ControlButtonStyle}"
-                            Command="{Binding ToggleCameraCommand}"/>
+            	Text="Camera"
+            	Command="{Binding ToggleCameraCommand}"
+            	IsEnabled="{Binding IsConnectedToObs}">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="BackgroundColor" Value="#444444"/>
+                                <Setter Property="TextColor" Value="White"/>
+                                <Setter Property="FontAttributes" Value="Bold"/>
+                                <Setter Property="CornerRadius" Value="5"/>
+                                <Setter Property="Padding" Value="10,5"/>
+                                <Setter Property="Margin" Value="5"/>
+                                <Style.Triggers>
+                                    <DataTrigger TargetType="Button" Binding="{Binding CameraEnabled}" Value="True">
+                                        <Setter Property="BackgroundColor" Value="#B388FF"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
 
                     <Button Grid.Row="1" Grid.Column="1"
-                            Text="Toggle Mic" 
-                            Style="{StaticResource ControlButtonStyle}"
-                            Command="{Binding ToggleMicCommand}"/>
+        	Text="Microphone"
+        	Command="{Binding ToggleMicCommand}"
+        	IsEnabled="{Binding IsConnectedToObs}">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="BackgroundColor" Value="#444444"/>
+                                <Setter Property="TextColor" Value="White"/>
+                                <Setter Property="FontAttributes" Value="Bold"/>
+                                <Setter Property="CornerRadius" Value="5"/>
+                                <Setter Property="Padding" Value="10,5"/>
+                                <Setter Property="Margin" Value="5"/>
+                                <Style.Triggers>
+                                    <DataTrigger TargetType="Button" Binding="{Binding MicEnabled}" Value="True">
+                                        <Setter Property="BackgroundColor" Value="#B388FF"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
 
                     <Button Grid.Row="1" Grid.Column="2"
-                            Text="Toggle Brain Data" 
-                            Style="{StaticResource ControlButtonStyle}"
-                            Command="{Binding ToggleBrainDataCommand}"/>
+        	Text="Brain Data"
+        	Command="{Binding ToggleBrainDataCommand}"
+        	IsEnabled="{Binding IsConnectedToObs}">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="BackgroundColor" Value="#444444"/>
+                                <Setter Property="TextColor" Value="White"/>
+                                <Setter Property="FontAttributes" Value="Bold"/>
+                                <Setter Property="CornerRadius" Value="5"/>
+                                <Setter Property="Padding" Value="10,5"/>
+                                <Setter Property="Margin" Value="5"/>
+                                <Style.Triggers>
+                                    <DataTrigger TargetType="Button" Binding="{Binding IsBrainDataVisible}" Value="True">
+                                        <Setter Property="BackgroundColor" Value="#B388FF"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
 
+                    <!-- Replace Configure Brain Data with Virtual Camera -->
                     <Button Grid.Row="1" Grid.Column="3"
-                            Text="Stream Quality" 
-                            Style="{StaticResource ControlButtonStyle}"
-                            Command="{Binding StreamQualityCommand}"/>
+        	Text="Virtual Camera"
+        	Command="{Binding ToggleVirtualCameraCommand}"
+        	IsEnabled="{Binding IsConnectedToObs}">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="BackgroundColor" Value="#444444"/>
+                                <Setter Property="TextColor" Value="White"/>
+                                <Setter Property="FontAttributes" Value="Bold"/>
+                                <Setter Property="CornerRadius" Value="5"/>
+                                <Setter Property="Padding" Value="10,5"/>
+                                <Setter Property="Margin" Value="5"/>
+                                <Style.Triggers>
+                                    <DataTrigger TargetType="Button" Binding="{Binding IsVirtualCameraActive}" Value="True">
+                                        <Setter Property="BackgroundColor" Value="#B388FF"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
 
-                    <Button Grid.Row="1" Grid.Column="4"
-                            Text="More Options" 
-                            Style="{StaticResource ControlButtonStyle}"
-                            Command="{Binding MoreOptionsCommand}"/>
+                    <!-- Second row controls -->
+                    <Button Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+            	Text="Configure Brain Data"
+            	Style="{StaticResource ControlButtonStyle}"
+            	Command="{Binding ConfigureBrainDataCommand}"
+            	IsEnabled="{Binding IsConnectedToObs}"
+            	Margin="5,10,5,0"/>
+
+                    <Button Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2"
+            	Text="Take Screenshot"
+            	Style="{StaticResource ControlButtonStyle}"
+            	Command="{Binding TakeScreenshotCommand}"
+            	IsEnabled="{Binding IsConnectedToObs}"
+            	Margin="5,10,5,0"/>
                 </Grid>
             </Frame>
         </Grid>
@@ -179,20 +404,47 @@
                 <VerticalStackLayout>
                     <Label Text="Brain Data" Style="{StaticResource SubHeaderLabelStyle}"/>
 
-                    <!-- Placeholder for brain data display -->
-                    <Label Text="Status: Connected" TextColor="#92D36E" Margin="0,5,0,0"/>
-
-                    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" Margin="0,10,0,0">
+                    <!-- Focus Level -->
+                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="0,10,0,0">
                         <Label Grid.Row="0" Grid.Column="0" Text="Focus:" TextColor="#AAAAAA"/>
-                        <Label Grid.Row="0" Grid.Column="1" Text="87%" TextColor="#CCCCCC"/>
-
-                        <Label Grid.Row="1" Grid.Column="0" Text="Alpha Wave:" TextColor="#AAAAAA"/>
-                        <Label Grid.Row="1" Grid.Column="1" Text="High" TextColor="#CCCCCC"/>
+                        <Label Grid.Row="0" Grid.Column="1" Text="{Binding BrainMetrics[Focus]}" TextColor="#92D36E"/>
+                        <ProgressBar Grid.Row="1" Grid.ColumnSpan="2" Progress="{Binding BrainMetrics[Focus], Converter={StaticResource PercentageConverter}}" ProgressColor="#92D36E" Margin="0,5,0,0"/>
                     </Grid>
 
-                    <Button Text="Configure Brain Data Display" 
-                            Style="{StaticResource PrimaryButtonStyle}"
-                            Command="{Binding ConfigureBrainDataCommand}"
+                    <!-- Alpha Wave -->
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,10,0,0">
+                        <Label Grid.Column="0" Text="Alpha Wave:" TextColor="#AAAAAA"/>
+                        <Label Grid.Column="1" Text="{Binding BrainMetrics[Alpha Wave]}" TextColor="{Binding BrainMetrics[Alpha Wave], Converter={StaticResource WaveLevelColorConverter}}"/>
+                    </Grid>
+
+                    <!-- Beta Wave -->
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,5,0,0">
+                        <Label Grid.Column="0" Text="Beta Wave:" TextColor="#AAAAAA"/>
+                        <Label Grid.Column="1" Text="{Binding BrainMetrics[Beta Wave]}" TextColor="{Binding BrainMetrics[Beta Wave], Converter={StaticResource WaveLevelColorConverter}}"/>
+                    </Grid>
+
+                    <!-- Theta Wave -->
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,5,0,0">
+                        <Label Grid.Column="0" Text="Theta Wave:" TextColor="#AAAAAA"/>
+                        <Label Grid.Column="1" Text="{Binding BrainMetrics[Theta Wave]}" TextColor="{Binding BrainMetrics[Theta Wave], Converter={StaticResource WaveLevelColorConverter}}"/>
+                    </Grid>
+
+                    <!-- Delta Wave -->
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,5,0,0">
+                        <Label Grid.Column="0" Text="Delta Wave:" TextColor="#AAAAAA"/>
+                        <Label Grid.Column="1" Text="{Binding BrainMetrics[Delta Wave]}" TextColor="{Binding BrainMetrics[Delta Wave], Converter={StaticResource WaveLevelColorConverter}}"/>
+                    </Grid>
+
+                    <!-- Gamma Wave -->
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,5,0,0">
+                        <Label Grid.Column="0" Text="Gamma Wave:" TextColor="#AAAAAA"/>
+                        <Label Grid.Column="1" Text="{Binding BrainMetrics[Gamma Wave]}" TextColor="{Binding BrainMetrics[Gamma Wave], Converter={StaticResource WaveLevelColorConverter}}"/>
+                    </Grid>
+
+                    <Button Text="Share Brain Event" 
+                            Style="{StaticResource ControlButtonStyle}"
+                            Command="{Binding ShareBrainEventCommand}"
+                            IsEnabled="{Binding IsLive}"
                             Margin="0,10,0,0"/>
                 </VerticalStackLayout>
             </Frame>
@@ -221,12 +473,14 @@
                        PlaceholderColor="#777777"
                        TextColor="White"
                        BackgroundColor="#383838"
-                       Margin="5,0"/>
+                       Margin="5,0"
+                       Text="{Binding ChatMessageInput}"/>
 
                 <Button Grid.Column="1" 
                         Text="Send" 
                         Style="{StaticResource PrimaryButtonStyle}"
-                        Command="{Binding SendChatMessageCommand}"/>
+                        Command="{Binding SendChatMessageCommand}"
+                        IsEnabled="{Binding IsLive}"/>
             </Grid>
 
             <!-- Stream Stats Panel -->
@@ -236,37 +490,35 @@
 
                     <Grid Grid.Row="1" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,10,0,0">
                         <Label Grid.Row="0" Grid.Column="0" Text="Viewers:" TextColor="#AAAAAA"/>
-                        <Label Grid.Row="0" Grid.Column="1" Text="128" TextColor="#CCCCCC"/>
+                        <Label Grid.Row="0" Grid.Column="1" Text="{Binding ViewerCount}" TextColor="#CCCCCC"/>
 
                         <Label Grid.Row="1" Grid.Column="0" Text="Stream Time:" TextColor="#AAAAAA"/>
-                        <Label Grid.Row="1" Grid.Column="1" Text="01:45:32" TextColor="#CCCCCC"/>
+                        <Label Grid.Row="1" Grid.Column="1" Text="{Binding StreamTimeDisplay}" TextColor="#CCCCCC"/>
 
                         <Label Grid.Row="2" Grid.Column="0" Text="Brain Events:" TextColor="#AAAAAA"/>
-                        <Label Grid.Row="2" Grid.Column="1" Text="47" TextColor="#CCCCCC"/>
+                        <Label Grid.Row="2" Grid.Column="1" Text="{Binding BrainEventCount}" TextColor="#CCCCCC"/>
 
                         <Label Grid.Row="3" Grid.Column="0" Text="Stream Health:" TextColor="#AAAAAA"/>
-                        <Label Grid.Row="3" Grid.Column="1" Text="Excellent" TextColor="#92D36E"/>
+                        <Label Grid.Row="3" Grid.Column="1" Text="{Binding StreamHealth}" TextColor="{Binding StreamHealth, Converter={StaticResource StreamHealthColorConverter}}"/>
                     </Grid>
                 </Grid>
             </Frame>
 
-            <!-- Quick Commands Panel -->
+            <!-- Quick Actions Panel -->
             <Frame Grid.Row="4" Style="{StaticResource CardStyle}">
                 <VerticalStackLayout>
-                    <Label Text="Quick Commands" Style="{StaticResource SubHeaderLabelStyle}"/>
+                    <Label Text="Quick Actions" Style="{StaticResource SubHeaderLabelStyle}"/>
+
+                    <Button Text="Mark Highlight" 
+                            Style="{StaticResource ControlButtonStyle}"
+                            Command="{Binding MarkHighlightCommand}"
+                            IsEnabled="{Binding IsLive}"
+                            Margin="0,10,0,0"/>
 
                     <Button Text="Take Screenshot" 
                             Style="{StaticResource ControlButtonStyle}"
                             Command="{Binding TakeScreenshotCommand}"
-                            Margin="0,10,0,0"/>
-
-                    <Button Text="Mark Highlight" 
-                            Style="{StaticResource ControlButtonStyle}"
-                            Command="{Binding MarkHighlightCommand}"/>
-
-                    <Button Text="Share Brain Event" 
-                            Style="{StaticResource ControlButtonStyle}"
-                            Command="{Binding ShareBrainEventCommand}"/>
+                            IsEnabled="{Binding IsConnectedToObs}"/>
                 </VerticalStackLayout>
             </Frame>
         </Grid>
@@ -274,7 +526,7 @@
         <!-- Bottom Status Bar -->
         <Grid Grid.Row="2" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*,Auto" BackgroundColor="#222222" Padding="10,5">
             <Label Grid.Column="0" 
-                   Text="Connected to: MK.IO Streaming" 
+                   Text="NeuroSpectator OBS Integration" 
                    TextColor="#AAAAAA" 
                    VerticalOptions="Center"/>
 
@@ -284,10 +536,10 @@
                    HorizontalOptions="Center"
                    VerticalOptions="Center"/>
 
-            <Label Grid.Column="2" 
-                   Text="Stream Key: ****-****-****" 
-                   TextColor="#AAAAAA" 
-                   VerticalOptions="Center"/>
+            <HorizontalStackLayout Grid.Column="2" Spacing="5" VerticalOptions="Center">
+                <Label Text="Brain Data Server:" TextColor="#AAAAAA"/>
+                <Label Text="Running" TextColor="#92D36E"/>
+            </HorizontalStackLayout>
         </Grid>
     </Grid>
 </ContentPage>

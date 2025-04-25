@@ -19,6 +19,8 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
     {
         private readonly MuseManager museManager;
         private readonly SemaphoreSlim semaphore = new(1, 1);
+        private readonly DeviceConnectionManager connectionManager;
+        private readonly IDispatcher dispatcher;
         private bool isScanning;
         private bool isDisposed;
 
@@ -34,8 +36,11 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
         /// <summary>
         /// Creates a new instance of the MuseDeviceManager class
         /// </summary>
-        public MuseDeviceManager()
+        public MuseDeviceManager(IDispatcher dispatcher = null, DeviceConnectionManager connectionManager = null)
         {
+            this.dispatcher = dispatcher;
+            this.connectionManager = connectionManager;
+
             try
             {
                 // Check and extract native libraries if needed
@@ -151,7 +156,7 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
                 Console.WriteLine($"Connecting to device: {museInfo.Name} ({museInfo.BluetoothMac})");
 
                 // Create a new device instance
-                var device = new MuseDevice(museInfo);
+                var device = new MuseDevice(museInfo, dispatcher, connectionManager);
 
                 try
                 {
@@ -166,6 +171,21 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
 
                         // Set as current device
                         CurrentDevice = device;
+
+                        // Register the device with the connection manager if available
+                        // This is crucial to maintain consistent state across app
+                        if (connectionManager != null)
+                        {
+                            Console.WriteLine($"Registering device with connection manager: {museInfo.Name}");
+                            connectionManager.RegisterDevice(device);
+
+                            // Explicitly notify the connection manager about the connection
+                            connectionManager.NotifyConnected(device);
+                        }
+                        else
+                        {
+                            Console.WriteLine("No connection manager available for device registration");
+                        }
 
                         // Return the device
                         return device;
@@ -209,6 +229,9 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
             await semaphore.WaitAsync();
             try
             {
+                // Unregister the device from the connection manager if available
+                connectionManager?.UnregisterDevice(CurrentDevice);
+
                 await CurrentDevice.DisconnectAsync();
                 CurrentDevice.Dispose();
                 CurrentDevice = null;
@@ -233,12 +256,62 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
         {
             try
             {
-                var muses = museManager.GetMuses();
-                var deviceInfos = new List<IBCIDeviceInfo>();
+                Console.WriteLine("MuseListChanged: Processing updated device list");
 
-                // Convert Muse SDK objects to our model objects properly
+                // Get the latest list from the Muse SDK
+                var muses = museManager.GetMuses();
+
+                // Log how many devices were found
+                Console.WriteLine($"MuseListChanged: Raw device count from SDK: {muses?.Count ?? 0}");
+
+                // Early exit if no devices found
+                if (muses == null || muses.Count == 0)
+                {
+                    Console.WriteLine("MuseListChanged: No devices found in SDK response");
+
+                    // Update UI on the main thread with empty list
+                    if (dispatcher != null)
+                    {
+                        dispatcher.Dispatch(() =>
+                        {
+                            AvailableDevices.Clear();
+                            DeviceListChanged?.Invoke(this, new List<IBCIDeviceInfo>());
+                        });
+                    }
+                    else
+                    {
+                        AvailableDevices.Clear();
+                        DeviceListChanged?.Invoke(this, new List<IBCIDeviceInfo>());
+                    }
+
+                    return;
+                }
+
+                // Process devices with better duplicate detection
+                var deviceInfos = new List<IBCIDeviceInfo>();
+                var uniqueMacs = new HashSet<string>(); // Track unique devices by MAC address
+                var duplicateCount = 0;
+
+                // Debug each device found
                 foreach (var muse in muses)
                 {
+                    Console.WriteLine($"  Device found: '{muse.Name}' - MAC: {muse.BluetoothMac} - RSSI: {muse.RSSI}");
+
+                    // Skip duplicates by MAC address
+                    if (!String.IsNullOrEmpty(muse.BluetoothMac) && !uniqueMacs.Add(muse.BluetoothMac))
+                    {
+                        Console.WriteLine($"  Skipping duplicate device: {muse.Name} ({muse.BluetoothMac})");
+                        duplicateCount++;
+                        continue;
+                    }
+
+                    // Skip devices with empty/invalid names or MAC addresses
+                    if (String.IsNullOrEmpty(muse.Name) || String.IsNullOrEmpty(muse.BluetoothMac))
+                    {
+                        Console.WriteLine($"  Skipping device with invalid name or MAC: {muse.Name} ({muse.BluetoothMac})");
+                        continue;
+                    }
+
                     // Create a MuseDeviceInfo object from the Muse SDK object
                     var deviceInfo = new MuseDeviceInfo
                     {
@@ -248,20 +321,23 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
                     };
 
                     deviceInfos.Add(deviceInfo);
+                    Console.WriteLine($"  Added to available devices: {deviceInfo.Name} ({deviceInfo.DeviceId})");
                 }
 
-                // Update UI on the main thread
-                MainThread.BeginInvokeOnMainThread(() =>
-                {
-                    AvailableDevices.Clear();
-                    foreach (var deviceInfo in deviceInfos)
-                    {
-                        AvailableDevices.Add(deviceInfo);
-                    }
+                Console.WriteLine($"MuseListChanged: Found {deviceInfos.Count} unique devices (filtered {duplicateCount} duplicates)");
 
-                    // Notify subscribers
-                    DeviceListChanged?.Invoke(this, deviceInfos);
-                });
+                // Update UI on the main thread
+                if (dispatcher != null)
+                {
+                    dispatcher.Dispatch(() =>
+                    {
+                        UpdateAvailableDevices(deviceInfos);
+                    });
+                }
+                else
+                {
+                    UpdateAvailableDevices(deviceInfos);
+                }
             }
             catch (Exception ex)
             {
@@ -274,6 +350,75 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
                     ex,
                     BCIErrorType.Unknown));
             }
+
+        }
+
+        /// <summary>
+        /// Updates the available devices list
+        /// </summary>
+        private void UpdateAvailableDevices(List<IBCIDeviceInfo> deviceInfos)
+        {
+            // Deduplicate devices based on MAC address
+            var uniqueDevices = deviceInfos
+                .GroupBy(d => d.DeviceId)
+                .Select(g => g.First())
+                .ToList();
+
+            // Update the available devices collection
+            AvailableDevices.Clear();
+            foreach (var deviceInfo in uniqueDevices)
+            {
+                AvailableDevices.Add(deviceInfo);
+            }
+
+            // Notify subscribers
+            DeviceListChanged?.Invoke(this, uniqueDevices);
+
+            // Check for automatic reconnection if needed
+            TryReconnectToLastDeviceIfNeeded();
+        }
+
+        /// <summary>
+        /// Tries to reconnect to the last connected device if needed
+        /// </summary>
+        private async void TryReconnectToLastDeviceIfNeeded()
+        {
+            // If we have no current device but there are available devices,
+            // and we have a previously connected device ID saved, try to reconnect
+            if (CurrentDevice == null && AvailableDevices.Count > 0)
+            {
+                string lastDeviceId = await GetLastConnectedDeviceIdAsync();
+                if (!string.IsNullOrEmpty(lastDeviceId))
+                {
+                    // Look for the last connected device in the available devices
+                    var lastDevice = AvailableDevices.FirstOrDefault(d => d.DeviceId == lastDeviceId);
+                    if (lastDevice != null)
+                    {
+                        // Try to reconnect
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await ConnectToDeviceAsync(lastDevice);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Auto-reconnect failed: {ex.Message}");
+                            }
+                        });
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets the ID of the last connected device
+        /// </summary>
+        private async Task<string> GetLastConnectedDeviceIdAsync()
+        {
+            // This would typically load from app settings or preferences
+            // For now, we'll just return null
+            return null;
         }
 
         /// <summary>

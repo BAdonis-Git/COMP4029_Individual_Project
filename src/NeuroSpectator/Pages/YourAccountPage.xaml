@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:pageModels="clr-namespace:NeuroSpectator.PageModels"
+             xmlns:utilities="clr-namespace:NeuroSpectator.Utilities"
+             x:Class="NeuroSpectator.Pages.YourAccountPage"
+             Title="Your Account"
+             BackgroundColor="#1E1E1E">
+
+    <ContentPage.Resources>
+        <utilities:InitialsConverter x:Key="InitialsConverter" />
+        <utilities:StringNotEmptyConverter x:Key="StringNotEmptyConverter" />
+
+        <Style x:Key="HeaderLabelStyle" TargetType="Label">
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="TextColor" Value="#CCCCCC"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+
+        <Style x:Key="SubHeaderLabelStyle" TargetType="Label">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="TextColor" Value="#AAAAAA"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+        </Style>
+
+        <Style x:Key="CardStyle" TargetType="Frame">
+            <Setter Property="BackgroundColor" Value="#2D2D2D"/>
+            <Setter Property="BorderColor" Value="#444444"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="15"/>
+            <Setter Property="Margin" Value="5"/>
+        </Style>
+
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="#B388FF"/>
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="CornerRadius" Value="5"/>
+        </Style>
+
+        <Style x:Key="DangerButtonStyle" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="#FF5252"/>
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="CornerRadius" Value="5"/>
+        </Style>
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <Grid Padding="20" RowDefinitions="Auto,Auto,*" RowSpacing="20">
+            <!-- User Profile Section -->
+            <Frame Grid.Row="0" Style="{StaticResource CardStyle}">
+                <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto">
+                    <!-- Profile Picture -->
+                    <Frame Grid.Row="0" Grid.RowSpan="3" Grid.Column="0" 
+                           BackgroundColor="#B388FF"
+                           CornerRadius="50"
+                           HeightRequest="100"
+                           WidthRequest="100"
+                           Padding="0"
+                           Margin="0,0,20,0">
+                        <!-- Display user initials as placeholder -->
+                        <Label Text="{Binding UserInfo.DisplayName, Converter={StaticResource InitialsConverter}}"
+                               FontSize="36"
+                               TextColor="White"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center"/>
+                    </Frame>
+
+                    <!-- User Info -->
+                    <Label Grid.Row="0" Grid.Column="1"
+                           Text="{Binding UserInfo.DisplayName}"
+                           FontSize="24"
+                           TextColor="White"
+                           FontAttributes="Bold"/>
+
+                    <Label Grid.Row="1" Grid.Column="1"
+                           Text="{Binding UserInfo.Email}"
+                           TextColor="#CCCCCC"
+                           FontSize="16"/>
+
+                    <Label Grid.Row="2" Grid.Column="1"
+                           Text="{Binding UserInfo.LastLogin, StringFormat='Last login: {0:g}'}"
+                           TextColor="#AAAAAA"
+                           FontSize="14"/>
+
+                    <!-- Sign Out Button -->
+                    <Button Grid.Row="0" Grid.Column="2"
+                            Text="Sign Out"
+                            Command="{Binding SignOutCommand}"
+                            Style="{StaticResource DangerButtonStyle}"
+                            VerticalOptions="Start"/>
+                </Grid>
+            </Frame>
+
+            <!-- Preferences Section -->
+            <Frame Grid.Row="1" Style="{StaticResource CardStyle}">
+                <VerticalStackLayout Spacing="15">
+                    <Label Text="App Preferences" Style="{StaticResource HeaderLabelStyle}"/>
+
+                    <!-- App Theme -->
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Grid.Column="0" 
+                               Text="Dark Mode"
+                               TextColor="White"
+                               VerticalOptions="Center"/>
+
+                        <Switch Grid.Column="1"
+                                IsToggled="{Binding IsDarkMode}"
+                                OnColor="#B388FF"/>
+                    </Grid>
+
+                    <BoxView HeightRequest="1" BackgroundColor="#444444"/>
+
+                    <!-- Notifications -->
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Grid.Column="0" 
+                               Text="Stream Notifications"
+                               TextColor="White"
+                               VerticalOptions="Center"/>
+
+                        <Switch Grid.Column="1"
+                                IsToggled="{Binding IsStreamNotificationsEnabled}"
+                                OnColor="#B388FF"/>
+                    </Grid>
+
+                    <BoxView HeightRequest="1" BackgroundColor="#444444"/>
+
+                    <!-- Language Selection -->
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Grid.Column="0" 
+                               Text="Language"
+                               TextColor="White"
+                               VerticalOptions="Center"/>
+
+                        <Picker Grid.Column="1"
+                                Title="Select Language"
+                                TitleColor="#AAAAAA"
+                                SelectedItem="{Binding PreferredLanguage}"
+                                TextColor="White"
+                                BackgroundColor="#383838">
+                            <Picker.Items>
+                                <x:String>English</x:String>
+                                <x:String>Spanish</x:String>
+                                <x:String>French</x:String>
+                                <x:String>German</x:String>
+                                <x:String>Japanese</x:String>
+                            </Picker.Items>
+                        </Picker>
+                    </Grid>
+
+                    <Button Text="Save Preferences" 
+                            Command="{Binding SavePreferencesCommand}"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            HorizontalOptions="End"
+                            Margin="0,10,0,0"/>
+
+                    <Label Text="{Binding StatusMessage}" 
+                           TextColor="#92D36E"
+                           HorizontalOptions="Center"
+                           IsVisible="{Binding StatusMessage, Converter={StaticResource StringNotEmptyConverter}}"/>
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- Account Data Section -->
+            <Frame Grid.Row="2" Style="{StaticResource CardStyle}">
+                <VerticalStackLayout Spacing="15">
+                    <Label Text="Account Data" Style="{StaticResource HeaderLabelStyle}"/>
+
+                    <Button Text="Export Your Data" 
+                            BackgroundColor="#444444"
+                            TextColor="White"
+                            HorizontalOptions="Start"/>
+
+                    <Button Text="Delete Account" 
+                            Command="{Binding DeleteAccountCommand}"
+                            BackgroundColor="#FF5252"
+                            TextColor="White"
+                            HorizontalOptions="Start"/>
+
+                    <Label Text="Deleting your account will remove all your data from our servers." 
+                           TextColor="#AAAAAA"
+                           FontSize="12"/>
+                </VerticalStackLayout>
+            </Frame>
+        </Grid>
+    </ScrollView>
+</ContentPage>

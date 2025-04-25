@@ -40,6 +40,10 @@
         <ShellContent ContentTemplate="{DataTemplate pages:ModPage}" Route="ModPage" />
     </FlyoutItem>
 
+    <FlyoutItem Title="Your Account" Icon="account.png">
+        <ShellContent ContentTemplate="{DataTemplate pages:YourAccountPage}" Route="YourAccountPage" />
+    </FlyoutItem>
+
     <Shell.FlyoutFooter>
         <Grid HeightRequest="50" BackgroundColor="#2D2D2D">
             <Label Text="NeuroSpectator v1.0" 

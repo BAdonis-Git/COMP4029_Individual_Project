@@ -19,6 +19,10 @@ namespace NeuroSpectator
             Routing.RegisterRoute(nameof(Pages.BrowsePage), typeof(Pages.BrowsePage));
             Routing.RegisterRoute(nameof(Pages.ModPage), typeof(Pages.ModPage));
             Routing.RegisterRoute(nameof(Pages.StreamSpectatorPage), typeof(Pages.StreamSpectatorPage));
+
+            // Register authentication pages
+            Routing.RegisterRoute(nameof(Pages.LoginPage), typeof(Pages.LoginPage));
+            Routing.RegisterRoute(nameof(Pages.YourAccountPage), typeof(Pages.YourAccountPage));
         }
     }
 }

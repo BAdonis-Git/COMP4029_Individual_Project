@@ -1,57 +1,63 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Diagnostics;
 using NeuroSpectator.Models.BCI.Common;
 using NeuroSpectator.Models.BCI.Muse;
 using NeuroSpectator.Services.BCI.Interfaces;
 using NeuroSpectator.Services.BCI.Muse.Core;
-using NeuroSpectator.Services.BCI.Muse.Interop;
-
-// Using aliases to resolve ambiguities
-using BCIConnectionState = NeuroSpectator.Models.BCI.Common.ConnectionState;
-using MuseConnectionState = NeuroSpectator.Services.BCI.Muse.Core.ConnectionState;
+using Microsoft.Maui.Dispatching;
 
 namespace NeuroSpectator.Services.BCI.Muse
 {
     /// <summary>
-    /// Implementation of IBCIDevice for the Muse headband
+    /// Implementation of IBCIDevice for Muse headbands
     /// </summary>
-    public class MuseDevice : IBCIDevice, IMuseConnectionListener, IMuseDataListener, IMuseErrorListener
+    public class MuseDevice : IBCIDevice
     {
-        private readonly NeuroSpectator.Services.BCI.Muse.Core.Muse museDevice;
         private readonly MuseDeviceInfo deviceInfo;
-        private readonly Dictionary<BrainWaveTypes, MuseDataPacketType> waveTypeMapping;
-        private readonly Dictionary<MuseDataPacketType, BrainWaveTypes> packetTypeMapping;
+        private readonly IDispatcher dispatcher;
+        private readonly DeviceConnectionManager connectionManager;
+        private Core.Muse museDevice;
+        private NeuroSpectator.Models.BCI.Common.ConnectionState connectionState = NeuroSpectator.Models.BCI.Common.ConnectionState.Disconnected;
         private bool isDisposed;
-        private bool isConnecting;
-        private bool isDisconnecting;
-        private SemaphoreSlim connectionSemaphore = new SemaphoreSlim(1, 1);
+        private int reconnectAttempts = 0;
+        private const int MaxReconnectAttempts = 3;
+        private readonly SemaphoreSlim connectionSemaphore = new SemaphoreSlim(1, 1);
+        private CancellationTokenSource monitoringCts;
+
+        // Track registered data types for reconnection
+        private BrainWaveTypes registeredWaveTypes = BrainWaveTypes.None;
 
         /// <summary>
-        /// Gets the name of the Muse device
+        /// Gets the name of the device
         /// </summary>
         public string Name => deviceInfo.Name;
 
         /// <summary>
-        /// Gets the device ID (MAC address) of the Muse device
+        /// Gets the unique identifier for the device
         /// </summary>
-        public string DeviceId => deviceInfo.BluetoothMac;
+        public string DeviceId => deviceInfo.DeviceId;
 
         /// <summary>
-        /// Gets the connection state of the Muse device
+        /// Gets the current connection state of the device
         /// </summary>
-        public BCIConnectionState ConnectionState => MapConnectionState(museDevice.GetConnectionState());
+        public NeuroSpectator.Models.BCI.Common.ConnectionState ConnectionState => connectionState;
 
         /// <summary>
-        /// Gets a value indicating whether the Muse device is connected
+        /// Gets a value indicating whether the device is currently connected
         /// </summary>
-        public bool IsConnected => ConnectionState == BCIConnectionState.Connected;
+        public bool IsConnected => connectionState == NeuroSpectator.Models.BCI.Common.ConnectionState.Connected;
 
         /// <summary>
-        /// Gets the type of the device
+        /// Gets the type of the BCI device
         /// </summary>
-        public BCIDeviceType DeviceType => BCIDeviceType.MuseHeadband;
+        public BCIDeviceType DeviceType => deviceInfo.DeviceType;
+
+        /// <summary>
+        /// Gets the signal strength of the device
+        /// </summary>
+        public double SignalStrength => deviceInfo.SignalStrength;
 
         // Events
         public event EventHandler<ConnectionStateChangedEventArgs> ConnectionStateChanged;
@@ -59,742 +65,896 @@ namespace NeuroSpectator.Services.BCI.Muse
         public event EventHandler<ArtifactEventArgs> ArtifactDetected;
         public event EventHandler<BCIErrorEventArgs> ErrorOccurred;
 
+        // For the first few errors, log details, then stop to avoid spam
+        static int errorCount = 0;
+
         /// <summary>
         /// Creates a new instance of the MuseDevice class
         /// </summary>
-        public MuseDevice(MuseDeviceInfo deviceInfo)
+        public MuseDevice(MuseDeviceInfo deviceInfo, IDispatcher dispatcher = null, DeviceConnectionManager connectionManager = null)
         {
             this.deviceInfo = deviceInfo ?? throw new ArgumentNullException(nameof(deviceInfo));
+            this.dispatcher = dispatcher;
+            this.connectionManager = connectionManager; // Optional, can be null
 
-            // Create a MuseInfo object from MuseDeviceInfo
-            var museInfo = new MuseInfo
-            {
-                Name = deviceInfo.Name,
-                BluetoothMac = deviceInfo.BluetoothMac,
-                RSSI = deviceInfo.RSSI
-            };
-
-            museDevice = NeuroSpectator.Services.BCI.Muse.Core.Muse.GetInstance(museInfo);
-
-            // Map brain wave types to Muse data packet types
-            waveTypeMapping = new Dictionary<BrainWaveTypes, MuseDataPacketType>
-            {
-                { BrainWaveTypes.Alpha, MuseDataPacketType.ALPHA_ABSOLUTE },
-                { BrainWaveTypes.Beta, MuseDataPacketType.BETA_ABSOLUTE },
-                { BrainWaveTypes.Delta, MuseDataPacketType.DELTA_ABSOLUTE },
-                { BrainWaveTypes.Theta, MuseDataPacketType.THETA_ABSOLUTE },
-                { BrainWaveTypes.Gamma, MuseDataPacketType.GAMMA_ABSOLUTE },
-                { BrainWaveTypes.Raw, MuseDataPacketType.EEG }
-            };
-
-            // Map Muse data packet types to brain wave types
-            packetTypeMapping = new Dictionary<MuseDataPacketType, BrainWaveTypes>
-            {
-                { MuseDataPacketType.ALPHA_ABSOLUTE, BrainWaveTypes.Alpha },
-                { MuseDataPacketType.BETA_ABSOLUTE, BrainWaveTypes.Beta },
-                { MuseDataPacketType.DELTA_ABSOLUTE, BrainWaveTypes.Delta },
-                { MuseDataPacketType.THETA_ABSOLUTE, BrainWaveTypes.Theta },
-                { MuseDataPacketType.GAMMA_ABSOLUTE, BrainWaveTypes.Gamma },
-                { MuseDataPacketType.EEG, BrainWaveTypes.Raw },
-                { MuseDataPacketType.BATTERY, BrainWaveTypes.None }
-            };
-
-            // Register listeners
-            try
-            {
-                museDevice.RegisterConnectionListener(this);
-                museDevice.RegisterErrorListener(this);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error registering initial listeners: {ex.Message}");
-            }
+            Debug.WriteLine($"Created MuseDevice: {deviceInfo.Name} ({deviceInfo.BluetoothMac})");
         }
 
         /// <summary>
-        /// Connects to the Muse device asynchronously
+        /// Connects to the device asynchronously with robust error handling
         /// </summary>
         public async Task ConnectAsync()
         {
             await connectionSemaphore.WaitAsync();
             try
             {
-                if (isConnecting || IsConnected)
+                if (IsConnected)
                 {
-                    Console.WriteLine("Already connecting or connected. Skipping connect operation.");
+                    Debug.WriteLine($"Device {Name} is already connected");
                     return;
                 }
 
-                MuseConnectionState state;
+                // Update connection state
+                UpdateConnectionState(NeuroSpectator.Models.BCI.Common.ConnectionState.Connecting);
+
+                // Notify connection manager if available
+                if (connectionManager != null)
+                {
+                    NotifyConnecting();
+                }
+
+                // Create Muse device if needed
+                if (museDevice == null)
+                {
+                    var info = new MuseInfo
+                    {
+                        Name = deviceInfo.Name,
+                        BluetoothMac = deviceInfo.BluetoothMac,
+                        RSSI = deviceInfo.RSSI
+                    };
+
+                    museDevice = Core.Muse.GetInstance(info);
+                }
+
+                // Check current state and force disconnect if needed
                 try
                 {
-                    state = museDevice.GetConnectionState();
-                    Console.WriteLine($"Current device state before connection attempt: {state}");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error getting connection state: {ex.Message}");
-                    state = MuseConnectionState.DISCONNECTED;
-                }
+                    var state = museDevice.GetConnectionState();
+                    Debug.WriteLine($"Current device state before connection: {state}");
 
-                // Force disconnection if not in DISCONNECTED state
-                if (state != MuseConnectionState.DISCONNECTED)
-                {
-                    Console.WriteLine($"Device not in DISCONNECTED state (current: {state}). Attempting to disconnect first.");
-                    try
+                    if (state != Core.ConnectionState.DISCONNECTED)
                     {
-                        museDevice.Disconnect();
-                        await Task.Delay(1000); // Brief delay for disconnection
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Pre-connect disconnect failed: {ex.Message}");
-                    }
-                }
-
-                isConnecting = true;
-                Console.WriteLine("Starting connection process...");
-
-                try
-                {
-                    // Step 1: Clear all existing listeners
-                    try
-                    {
-                        museDevice.UnregisterAllListeners();
-                        Console.WriteLine("Cleared existing listeners");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error clearing listeners: {ex.Message}");
-                    }
-
-                    // Step 2: Register essential listeners BEFORE connection
-                    try
-                    {
-                        museDevice.RegisterConnectionListener(this);
-                        museDevice.RegisterErrorListener(this);
-                        Console.WriteLine("Registered connection and error listeners");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error registering essential listeners: {ex.Message}");
-                    }
-
-                    // Step 3: Set the preset BEFORE connection attempt
-                    try
-                    {
-                        museDevice.SetPreset(MusePreset.PRESET_21);
-                        Console.WriteLine("Set device preset to PRESET_21");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error setting preset: {ex.Message}");
-                    }
-
-                    // Step 4: Enable data transmission before connecting
-                    try
-                    {
-                        museDevice.EnableDataTransmission(true);
-                        Console.WriteLine("Enabled data transmission");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error enabling data transmission: {ex.Message}");
-                    }
-
-                    // Step 5: Register data listeners BEFORE connection
-                    Console.WriteLine("Registering for brain wave data types");
-                    try
-                    {
-                        foreach (BrainWaveTypes type in Enum.GetValues(typeof(BrainWaveTypes)))
+                        Debug.WriteLine("Device not in DISCONNECTED state. Disconnecting first.");
+                        try
                         {
-                            if (type != BrainWaveTypes.None && type != BrainWaveTypes.All &&
-                                waveTypeMapping.TryGetValue(type, out MuseDataPacketType packetType))
-                            {
-                                try
-                                {
-                                    Console.WriteLine($"Registering for {type} data");
-                                    museDevice.RegisterDataListener(this, packetType);
-                                }
-                                catch (Exception ex)
-                                {
-                                    Console.WriteLine($"Error registering for {type} data: {ex.Message}");
-                                }
-                            }
+                            museDevice.Disconnect();
+                            await Task.Delay(1000); // Brief delay for disconnection
                         }
-
-                        // Always register for artifacts and battery
-                        Console.WriteLine("Registering for artifact data");
-                        museDevice.RegisterDataListener(this, MuseDataPacketType.ARTIFACTS);
-                        Console.WriteLine("Registering for battery data");
-                        museDevice.RegisterDataListener(this, MuseDataPacketType.BATTERY);
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"Pre-connect disconnect failed: {ex.Message}");
+                        }
                     }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error registering data listeners: {ex.Message}");
-                    }
-
-                    // Step 6: Start connection - USING RUNASYNCHRONOUSLY!
-                    Console.WriteLine("Starting connection to device");
-                    try
-                    {
-                        museDevice.RunAsynchronously();
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error starting connection: {ex.Message}");
-                        throw;
-                    }
-
-                    // Step 7: Wait for connection to establish
-                    var connectionSuccess = await WaitForConnection(
-                        MuseConnectionState.CONNECTED, timeoutMs: 15000);
-
-                    if (!connectionSuccess)
-                    {
-                        throw new Exception("Failed to establish connection within timeout period");
-                    }
-
-                    Console.WriteLine("Connection established successfully");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error during connection: {ex.Message}");
-                    // Try to disconnect cleanly if connection fails
-                    try
-                    {
-                        museDevice.Disconnect();
-                    }
-                    catch { /* Ignore exceptions during cleanup */ }
+                    Debug.WriteLine($"Error checking connection state: {ex.Message}");
+                }
+
+                // Step 1: Clear all existing listeners
+                try
+                {
+                    museDevice.UnregisterAllListeners();
+                    Debug.WriteLine("Cleared existing listeners");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error clearing listeners: {ex.Message}");
+                }
+
+                // Step 2: Register essential listeners
+                museDevice.RegisterConnectionListener(new MuseConnectionHandler(this));
+                museDevice.RegisterErrorListener(new MuseErrorHandler(this));
+
+                // Step 3: Set preset BEFORE connecting
+                try
+                {
+                    museDevice.SetPreset(MusePreset.PRESET_21);
+                    Debug.WriteLine("Set device preset to PRESET_21");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error setting preset: {ex.Message}");
+                }
+
+                // Step 4: Enable data transmission BEFORE connecting
+                try
+                {
+                    museDevice.EnableDataTransmission(true);
+                    Debug.WriteLine("Enabled data transmission");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error enabling data transmission: {ex.Message}");
+                }
+
+                // Step 5: Connect using RunAsynchronously instead of Connect
+                Debug.WriteLine($"Starting connection to Muse device: {deviceInfo.Name}");
+                try
+                {
+                    // CRITICAL CHANGE: Use RunAsynchronously instead of Connect
+                    museDevice.RunAsynchronously();
+                    Debug.WriteLine("Connection started asynchronously");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Exception during RunAsynchronously: {ex.Message}");
                     throw;
+                }
+
+                // Wait for connection with improved state checking
+                var success = await WaitForConnectionStateWithDirectCheck(NeuroSpectator.Models.BCI.Common.ConnectionState.Connected, TimeSpan.FromSeconds(30));
+
+                if (success)
+                {
+                    Debug.WriteLine($"Successfully connected to Muse device: {deviceInfo.Name}");
+                    reconnectAttempts = 0;
+
+                    // Re-register for brain wave data if needed
+                    if (registeredWaveTypes != BrainWaveTypes.None)
+                    {
+                        RegisterForBrainWaveData(registeredWaveTypes);
+                    }
+
+                    // Set up connection monitoring
+                    StartConnectionMonitoring();
+
+                    // Notify connection manager
+                    if (connectionManager != null)
+                    {
+                        NotifyConnected();
+                    }
+                }
+                else
+                {
+                    Debug.WriteLine($"Failed to connect to Muse device: {deviceInfo.Name} (timeout)");
+                    UpdateConnectionState(NeuroSpectator.Models.BCI.Common.ConnectionState.Disconnected);
+
+                    if (connectionManager != null)
+                    {
+                        NotifyConnectionFailed("Connection timeout");
+                    }
+
+                    throw new TimeoutException("Connection timeout");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in ConnectAsync: {ex.Message}");
-                ErrorOccurred?.Invoke(this, new BCIErrorEventArgs(
-                    $"Connection failed: {ex.Message}", ex, BCIErrorType.ConnectionFailed));
+                Debug.WriteLine($"Error connecting to Muse device: {ex.Message}");
+                UpdateConnectionState(NeuroSpectator.Models.BCI.Common.ConnectionState.Disconnected);
+
+                if (connectionManager != null)
+                {
+                    NotifyConnectionFailed(ex.Message);
+                }
+
+                ErrorOccurred?.Invoke(this, new BCIErrorEventArgs($"Error connecting to device: {ex.Message}", ex, BCIErrorType.ConnectionFailed));
+                throw;
             }
             finally
             {
-                isConnecting = false;
                 connectionSemaphore.Release();
             }
         }
 
-        /// <summary>
-        /// Wait for a specific connection state
-        /// </summary>
-        private async Task<bool> WaitForConnection(
-            MuseConnectionState targetState, int timeoutMs = 10000, int pollIntervalMs = 500)
+        private async Task<bool> WaitForConnectionStateWithDirectCheck(NeuroSpectator.Models.BCI.Common.ConnectionState targetState, TimeSpan timeout)
         {
-            Console.WriteLine($"Waiting for device to reach state: {targetState}");
-            int elapsed = 0;
+            var startTime = DateTime.Now;
+            var endTime = startTime + timeout;
+            int logInterval = 0;
 
-            while (elapsed < timeoutMs)
+            while (DateTime.Now < endTime)
             {
-                MuseConnectionState currentState;
                 try
                 {
-                    currentState = museDevice.GetConnectionState();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error getting connection state: {ex.Message}");
-                    await Task.Delay(pollIntervalMs);
-                    elapsed += pollIntervalMs;
-                    continue;
-                }
+                    // Check the actual device state directly
+                    var deviceState = museDevice.GetConnectionState();
+                    var mappedState = MapConnectionState(deviceState);
 
-                if (elapsed % 1000 == 0) // Log every second
-                {
-                    Console.WriteLine($"Current state: {currentState}, waiting for: {targetState} (elapsed: {elapsed}ms)");
-                }
-
-                if (currentState == targetState)
-                {
-                    Console.WriteLine($"Device reached target state: {targetState} after {elapsed}ms");
-                    return true;
-                }
-
-                await Task.Delay(pollIntervalMs);
-                elapsed += pollIntervalMs;
-            }
-
-            Console.WriteLine($"Timed out waiting for state: {targetState} after {elapsed}ms");
-            return false;
-        }
-
-        /// <summary>
-        /// Disconnects from the Muse device asynchronously
-        /// </summary>
-        public async Task DisconnectAsync()
-        {
-            await connectionSemaphore.WaitAsync();
-            try
-            {
-                if (isDisconnecting)
-                {
-                    Console.WriteLine("Already disconnecting. Skipping disconnect operation.");
-                    return;
-                }
-
-                // Check if already disconnected
-                MuseConnectionState currentState;
-                try
-                {
-                    currentState = museDevice.GetConnectionState();
-                    if (currentState == MuseConnectionState.DISCONNECTED)
+                    // Log periodically
+                    logInterval += 100;
+                    if (logInterval >= 1000)
                     {
-                        Console.WriteLine("Device already disconnected.");
-                        return;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error getting connection state: {ex.Message}");
-                }
-
-                isDisconnecting = true;
-                Console.WriteLine("Starting disconnection process...");
-
-                try
-                {
-                    // First disable data transmission
-                    Console.WriteLine("Disabling data transmission");
-                    try
-                    {
-                        museDevice.EnableDataTransmission(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error disabling data transmission: {ex.Message}");
+                        Debug.WriteLine($"Current state: {deviceState} (mapped: {mappedState}), waiting for: {targetState} (elapsed: {(DateTime.Now - startTime).TotalMilliseconds}ms)");
+                        logInterval = 0;
                     }
 
-                    // Brief delay to let data transmission stop
-                    await Task.Delay(200);
-
-                    // Unregister all listeners except connection listener
-                    Console.WriteLine("Unregistering listeners");
-                    try
+                    // If actual device state matches what we want, update our state and return success
+                    if (mappedState == targetState)
                     {
-                        museDevice.UnregisterAllListeners();
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error unregistering listeners: {ex.Message}");
+                        UpdateConnectionState(targetState);
+                        Debug.WriteLine($"Device reached target state: {targetState} after {(DateTime.Now - startTime).TotalMilliseconds}ms");
+                        return true;
                     }
 
-                    // Re-register connection listener
-                    Console.WriteLine("Re-registering connection listener");
-                    try
+                    // Also check our cached state (might be updated by events)
+                    if (connectionState == targetState)
                     {
-                        museDevice.RegisterConnectionListener(this);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error re-registering connection listener: {ex.Message}");
+                        Debug.WriteLine($"Connection state reached target state: {targetState} after {(DateTime.Now - startTime).TotalMilliseconds}ms");
+                        return true;
                     }
 
-                    // Perform the disconnection
-                    Console.WriteLine("Sending disconnect command");
-                    try
+                    // Check for error states
+                    if (targetState == NeuroSpectator.Models.BCI.Common.ConnectionState.Connected &&
+                        (mappedState == NeuroSpectator.Models.BCI.Common.ConnectionState.NeedsUpdate ||
+                         mappedState == NeuroSpectator.Models.BCI.Common.ConnectionState.NeedsLicense))
                     {
-                        museDevice.Disconnect();
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error disconnecting: {ex.Message}");
-                        throw;
-                    }
-
-                    // Wait for the device to actually disconnect
-                    bool disconnected = await WaitForConnection(
-                        MuseConnectionState.DISCONNECTED, timeoutMs: 5000);
-
-                    if (disconnected)
-                    {
-                        Console.WriteLine("Device disconnected successfully");
-                    }
-                    else
-                    {
-                        Console.WriteLine("Disconnect timeout - device might still be connected");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error during disconnect operation: {ex.Message}");
-                    throw;
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error in DisconnectAsync: {ex.Message}");
-                ErrorOccurred?.Invoke(this, new BCIErrorEventArgs(
-                    $"Disconnection failed: {ex.Message}", ex, BCIErrorType.DeviceDisconnected));
-            }
-            finally
-            {
-                isDisconnecting = false;
-                connectionSemaphore.Release();
-            }
-        }
-
-        /// <summary>
-        /// Registers for brain wave data from the Muse device
-        /// </summary>
-        public void RegisterForBrainWaveData(BrainWaveTypes waveTypes)
-        {
-            try
-            {
-                Console.WriteLine($"Registering for brain wave data: {waveTypes}");
-
-                // Handle the All flag
-                if (waveTypes.HasFlag(BrainWaveTypes.All))
-                {
-                    // Register for all types except None and All
-                    foreach (BrainWaveTypes type in Enum.GetValues(typeof(BrainWaveTypes)))
-                    {
-                        if (type != BrainWaveTypes.None && type != BrainWaveTypes.All &&
-                            waveTypeMapping.TryGetValue(type, out MuseDataPacketType packetType))
-                        {
-                            try
-                            {
-                                Console.WriteLine($"Registering for {type} data");
-                                museDevice.RegisterDataListener(this, packetType);
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"Error registering for {type} data: {ex.Message}");
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    // Register only for specific types
-                    foreach (BrainWaveTypes type in Enum.GetValues(typeof(BrainWaveTypes)))
-                    {
-                        if (type != BrainWaveTypes.None && type != BrainWaveTypes.All &&
-                            waveTypes.HasFlag(type) &&
-                            waveTypeMapping.TryGetValue(type, out MuseDataPacketType packetType))
-                        {
-                            try
-                            {
-                                Console.WriteLine($"Registering for {type} data");
-                                museDevice.RegisterDataListener(this, packetType);
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"Error registering for {type} data: {ex.Message}");
-                            }
-                        }
-                    }
-                }
-
-                // Always register for artifacts
-                try
-                {
-                    Console.WriteLine("Registering for artifact data");
-                    museDevice.RegisterDataListener(this, MuseDataPacketType.ARTIFACTS);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error registering for artifact data: {ex.Message}");
-                }
-
-                // Always register for battery
-                try
-                {
-                    Console.WriteLine("Registering for battery data");
-                    museDevice.RegisterDataListener(this, MuseDataPacketType.BATTERY);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error registering for battery data: {ex.Message}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error registering for brain wave data: {ex.Message}");
-                ErrorOccurred?.Invoke(this, new BCIErrorEventArgs(
-                    $"Failed to register data: {ex.Message}", ex, BCIErrorType.Unknown));
-            }
-        }
-
-        /// <summary>
-        /// Unregisters from brain wave data
-        /// </summary>
-        public void UnregisterFromBrainWaveData(BrainWaveTypes waveTypes)
-        {
-            try
-            {
-                Console.WriteLine($"Unregistering from brain wave data: {waveTypes}");
-
-                // Handle the All flag
-                if (waveTypes.HasFlag(BrainWaveTypes.All))
-                {
-                    foreach (BrainWaveTypes type in Enum.GetValues(typeof(BrainWaveTypes)))
-                    {
-                        if (type != BrainWaveTypes.None && type != BrainWaveTypes.All &&
-                            waveTypeMapping.TryGetValue(type, out MuseDataPacketType packetType))
-                        {
-                            try
-                            {
-                                Console.WriteLine($"Unregistering from {type} data");
-                                museDevice.UnregisterDataListener(this, packetType);
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"Error unregistering from {type} data: {ex.Message}");
-                            }
-                        }
-                    }
-
-                    // Also unregister from artifacts
-                    try
-                    {
-                        Console.WriteLine("Unregistering from artifact data");
-                        museDevice.UnregisterDataListener(this, MuseDataPacketType.ARTIFACTS);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error unregistering from artifact data: {ex.Message}");
-                    }
-
-                    // And battery
-                    try
-                    {
-                        Console.WriteLine("Unregistering from battery data");
-                        museDevice.UnregisterDataListener(this, MuseDataPacketType.BATTERY);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error unregistering from battery data: {ex.Message}");
-                    }
-                }
-                else
-                {
-                    // Unregister only from specific types
-                    foreach (BrainWaveTypes type in Enum.GetValues(typeof(BrainWaveTypes)))
-                    {
-                        if (type != BrainWaveTypes.None && type != BrainWaveTypes.All &&
-                            waveTypes.HasFlag(type) &&
-                            waveTypeMapping.TryGetValue(type, out MuseDataPacketType packetType))
-                        {
-                            try
-                            {
-                                Console.WriteLine($"Unregistering from {type} data");
-                                museDevice.UnregisterDataListener(this, packetType);
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"Error unregistering from {type} data: {ex.Message}");
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error unregistering from brain wave data: {ex.Message}");
-                ErrorOccurred?.Invoke(this, new BCIErrorEventArgs(
-                    $"Failed to unregister data: {ex.Message}", ex, BCIErrorType.Unknown));
-            }
-        }
-
-        /// <summary>
-        /// Gets battery level from the device
-        /// </summary>
-        public async Task<double> GetBatteryLevelAsync()
-        {
-            if (!IsConnected)
-            {
-                Console.WriteLine("Cannot get battery level: device not connected");
-                return 0.0;
-            }
-
-            try
-            {
-                var config = museDevice.GetMuseConfiguration();
-                if (config != null)
-                {
-                    // Use property directly, not a getter method
-                    double batteryPercent = config.BatteryPercentRemaining;
-                    Console.WriteLine($"Battery level: {batteryPercent}%");
-                    return batteryPercent;
-                }
-                else
-                {
-                    Console.WriteLine("Cannot get battery level: configuration is null");
-                    return 0.0;
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error getting battery level: {ex.Message}");
-                return 0.0;
-            }
-        }
-
-        /// <summary>
-        /// Gets signal quality by checking configuration properties
-        /// </summary>
-        public async Task<double> GetSignalQualityAsync()
-        {
-            if (!IsConnected)
-            {
-                Console.WriteLine("Cannot get signal quality: device not connected");
-                return 0.0;
-            }
-
-            // In a real implementation, you'd use the horseshoe values or DRL/REF data
-            // For now, we're returning a placeholder value
-            return await Task.FromResult(1.0);
-        }
-
-        /// <summary>
-        /// Gets detailed information about the connected device
-        /// </summary>
-        public Dictionary<string, string> GetDeviceDetails()
-        {
-            var details = new Dictionary<string, string>();
-
-            try
-            {
-                details["Name"] = Name ?? "Unknown";
-                details["Model"] = "MuseHeadband";
-                details["DeviceId"] = DeviceId ?? "Unknown";
-
-                if (!IsConnected)
-                {
-                    details["Status"] = "Not connected";
-                    return details;
-                }
-
-                try
-                {
-                    // Try with fallback to avoid continuous exceptions
-                    var config = museDevice.GetMuseConfiguration();
-                    if (config != null)
-                    {
-                        details["Battery"] = $"{config.BatteryPercentRemaining}%";
-                        details["EEGChannels"] = config.EegChannelCount.ToString();
-                        details["CurrentPreset"] = config.Preset.ToString();
-                        details["NotchFilterEnabled"] = config.NotchFilterEnabled.ToString();
-                        details["SampleRate"] = config.DownsampleRate.ToString();
-                        details["DRL/REFEnabled"] = config.DrlRefEnabled.ToString();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error getting configuration: {ex.Message}");
-                    // Add safe defaults instead of failing
-                    details["Battery"] = "Unknown";
-                    details["EEGChannels"] = "4";
-                    details["CurrentPreset"] = "Unknown";
-                    details["NotchFilterEnabled"] = "Unknown";
-                    details["SampleRate"] = "Unknown";
-                    details["DRL/REFEnabled"] = "Unknown";
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error in GetDeviceDetails: {ex.Message}");
-                details["Error"] = $"Failed to retrieve details: {ex.Message}";
-            }
-
-            return details;
-        }
-
-        /// <summary>
-        /// Receives a connection packet from the Muse device
-        /// </summary>
-        public void ReceiveMuseConnectionPacket(MuseConnectionPacket packet, NeuroSpectator.Services.BCI.Muse.Core.Muse muse)
-        {
-            try
-            {
-                Console.WriteLine($"Connection state changed: {packet.PreviousConnectionState} -> {packet.CurrentConnectionState}");
-
-                var oldState = MapConnectionState(packet.PreviousConnectionState);
-                var newState = MapConnectionState(packet.CurrentConnectionState);
-
-                // If we're now connected, ensure data transmission is enabled
-                if (packet.CurrentConnectionState == MuseConnectionState.CONNECTED)
-                {
-                    Console.WriteLine("Device connected successfully!");
-
-                    try
-                    {
-                        // Ensure data transmission is enabled
-                        museDevice.EnableDataTransmission(true);
-                        Console.WriteLine("Data transmission confirmed enabled");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error enabling data transmission: {ex.Message}");
-                    }
-
-                    try
-                    {
-                        // Make sure data listeners are registered
-                        RegisterForBrainWaveData(BrainWaveTypes.All);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error registering data listeners: {ex.Message}");
-                    }
-                }
-                // If we're disconnected, log it
-                else if (packet.CurrentConnectionState == MuseConnectionState.DISCONNECTED)
-                {
-                    Console.WriteLine("Device disconnected");
-                }
-
-                // Notify subscribers of the state change
-                ConnectionStateChanged?.Invoke(this, new ConnectionStateChangedEventArgs(oldState, newState));
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error processing connection packet: {ex.Message}");
-                ErrorOccurred?.Invoke(this, new BCIErrorEventArgs(
-                    $"Connection state error: {ex.Message}", ex, BCIErrorType.Unknown));
-            }
-        }
-
-        // Connection verification method
-        public async Task<bool> VerifyConnectionAsync()
-        {
-            if (!IsConnected)
-            {
-                Console.WriteLine("Cannot verify connection - device not connected");
-                return false;
-            }
-
-            try
-            {
-                Console.WriteLine("Verifying device connection...");
-
-                // Check the connection state again
-                MuseConnectionState state;
-                try
-                {
-                    state = museDevice.GetConnectionState();
-                    if (state != MuseConnectionState.CONNECTED)
-                    {
-                        Console.WriteLine($"Device reports state {state}, not CONNECTED");
+                        Debug.WriteLine($"Cannot connect: device needs update or license");
                         return false;
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error getting connection state: {ex.Message}");
+                    Debug.WriteLine($"Error checking connection state: {ex.Message}");
+                }
+
+                await Task.Delay(100);
+            }
+
+            Debug.WriteLine($"Timed out waiting for state: {targetState} after {(DateTime.Now - startTime).TotalMilliseconds}ms");
+            return connectionState == targetState;
+        }
+
+        private static NeuroSpectator.Models.BCI.Common.ConnectionState MapConnectionState(Core.ConnectionState state)
+        {
+            return state switch
+            {
+                Core.ConnectionState.CONNECTED => NeuroSpectator.Models.BCI.Common.ConnectionState.Connected,
+                Core.ConnectionState.CONNECTING => NeuroSpectator.Models.BCI.Common.ConnectionState.Connecting,
+                Core.ConnectionState.DISCONNECTED => NeuroSpectator.Models.BCI.Common.ConnectionState.Disconnected,
+                Core.ConnectionState.NEEDS_UPDATE => NeuroSpectator.Models.BCI.Common.ConnectionState.NeedsUpdate,
+                Core.ConnectionState.NEEDS_LICENSE => NeuroSpectator.Models.BCI.Common.ConnectionState.NeedsLicense,
+                _ => NeuroSpectator.Models.BCI.Common.ConnectionState.Unknown
+            };
+        }
+
+
+        /// <summary>
+        /// Disconnects from the device asynchronously
+        /// </summary>
+        public async Task DisconnectAsync()
+        {
+            await connectionSemaphore.WaitAsync();
+
+            try
+            {
+                if (!IsConnected && ConnectionState != NeuroSpectator.Models.BCI.Common.ConnectionState.Connecting)
+                {
+                    Debug.WriteLine($"Device {Name} is already disconnected");
+                    return;
+                }
+
+                Debug.WriteLine($"Disconnecting from Muse device: {deviceInfo.Name}");
+
+                // Stop connection monitoring
+                StopConnectionMonitoring();
+
+                // First unregister from all data listeners to avoid callbacks during disconnect
+                UnregisterFromBrainWaveData(BrainWaveTypes.All);
+
+                // Then disconnect
+                if (museDevice != null)
+                {
+                    try
+                    {
+                        // Use a try-catch block here specifically for the assertion failure
+                        museDevice.Disconnect();
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Error during Muse disconnect (ignoring): {ex.Message}");
+                        // Still update our internal state even if the SDK throws
+                        UpdateConnectionState(NeuroSpectator.Models.BCI.Common.ConnectionState.Disconnected);
+                    }
+
+                    // Wait for state change or timeout
+                    await WaitForConnectionStateAsync(NeuroSpectator.Models.BCI.Common.ConnectionState.Disconnected, TimeSpan.FromSeconds(5));
+                }
+                else
+                {
+                    // No device, so just update state
+                    UpdateConnectionState(NeuroSpectator.Models.BCI.Common.ConnectionState.Disconnected);
+                }
+
+                // Notify connection manager if available
+                if (connectionManager != null)
+                {
+                    NotifyDisconnected();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error disconnecting from Muse device: {ex.Message}");
+
+                // Force the state to disconnected regardless of errors
+                UpdateConnectionState(NeuroSpectator.Models.BCI.Common.ConnectionState.Disconnected);
+
+                // Notify connection manager if available
+                if (connectionManager != null)
+                {
+                    NotifyDisconnected();
+                }
+
+                ErrorOccurred?.Invoke(this, new BCIErrorEventArgs($"Error disconnecting from device: {ex.Message}", ex, BCIErrorType.DeviceDisconnected));
+            }
+            finally
+            {
+                // Ensure we're marked as disconnected regardless of what happened
+                UpdateConnectionState(NeuroSpectator.Models.BCI.Common.ConnectionState.Disconnected);
+                connectionSemaphore.Release();
+            }
+        }
+
+        /// <summary>
+        /// Registers for brain wave data with the specified types
+        /// </summary>
+        public void RegisterForBrainWaveData(BrainWaveTypes waveTypes)
+        {
+            if (!IsConnected)
+            {
+                Debug.WriteLine($"Saving registration for wave types {waveTypes} for when device is connected");
+                // Save which types to register for when connected
+                registeredWaveTypes |= waveTypes;
+                return;
+            }
+
+            try
+            {
+                Debug.WriteLine($"Registering for brain wave data: {waveTypes}");
+                registeredWaveTypes |= waveTypes;
+                var handler = new MuseDataHandler(this);
+
+                if ((waveTypes & BrainWaveTypes.Alpha) != 0)
+                {
+                    museDevice.RegisterDataListener(handler, MuseDataPacketType.ALPHA_ABSOLUTE);
+                }
+
+                if ((waveTypes & BrainWaveTypes.Beta) != 0)
+                {
+                    museDevice.RegisterDataListener(handler, MuseDataPacketType.BETA_ABSOLUTE);
+                }
+
+                if ((waveTypes & BrainWaveTypes.Delta) != 0)
+                {
+                    museDevice.RegisterDataListener(handler, MuseDataPacketType.DELTA_ABSOLUTE);
+                }
+
+                if ((waveTypes & BrainWaveTypes.Theta) != 0)
+                {
+                    museDevice.RegisterDataListener(handler, MuseDataPacketType.THETA_ABSOLUTE);
+                }
+
+                if ((waveTypes & BrainWaveTypes.Gamma) != 0)
+                {
+                    museDevice.RegisterDataListener(handler, MuseDataPacketType.GAMMA_ABSOLUTE);
+                }
+
+                if ((waveTypes & BrainWaveTypes.Raw) != 0)
+                {
+                    museDevice.RegisterDataListener(handler, MuseDataPacketType.EEG);
+                }
+
+                // Register for artifacts (blinks, jaw clench, etc.)
+                museDevice.RegisterDataListener(handler, MuseDataPacketType.ARTIFACTS);
+
+                // Enable data transmission
+                museDevice.EnableDataTransmission(true);
+
+                Debug.WriteLine($"Successfully registered for brain wave data: {waveTypes}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error registering for brain wave data: {ex.Message}");
+                ErrorOccurred?.Invoke(this, new BCIErrorEventArgs($"Error registering for brain wave data: {ex.Message}", ex));
+            }
+        }
+
+        /// <summary>
+        /// Unregisters from brain wave data with the specified types
+        /// </summary>
+        public void UnregisterFromBrainWaveData(BrainWaveTypes waveTypes)
+        {
+            if (!IsConnected || museDevice == null)
+                return;
+
+            try
+            {
+                Debug.WriteLine($"Unregistering from brain wave data: {waveTypes}");
+                registeredWaveTypes &= ~waveTypes;
+
+                if (waveTypes == BrainWaveTypes.All)
+                {
+                    // Special case - unregister everything
+                    try
+                    {
+                        museDevice.UnregisterAllListeners();
+
+                        // Re-register for connection events (to maintain state tracking)
+                        museDevice.RegisterConnectionListener(new MuseConnectionHandler(this));
+                        museDevice.RegisterErrorListener(new MuseErrorHandler(this));
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Error unregistering all listeners: {ex.Message}");
+                    }
+                    registeredWaveTypes = BrainWaveTypes.None;
+                    return;
+                }
+
+                var handler = new MuseDataHandler(this);
+
+                if ((waveTypes & BrainWaveTypes.Alpha) != 0)
+                {
+                    museDevice.UnregisterDataListener(handler, MuseDataPacketType.ALPHA_ABSOLUTE);
+                }
+
+                if ((waveTypes & BrainWaveTypes.Beta) != 0)
+                {
+                    museDevice.UnregisterDataListener(handler, MuseDataPacketType.BETA_ABSOLUTE);
+                }
+
+                if ((waveTypes & BrainWaveTypes.Delta) != 0)
+                {
+                    museDevice.UnregisterDataListener(handler, MuseDataPacketType.DELTA_ABSOLUTE);
+                }
+
+                if ((waveTypes & BrainWaveTypes.Theta) != 0)
+                {
+                    museDevice.UnregisterDataListener(handler, MuseDataPacketType.THETA_ABSOLUTE);
+                }
+
+                if ((waveTypes & BrainWaveTypes.Gamma) != 0)
+                {
+                    museDevice.UnregisterDataListener(handler, MuseDataPacketType.GAMMA_ABSOLUTE);
+                }
+
+                if ((waveTypes & BrainWaveTypes.Raw) != 0)
+                {
+                    museDevice.UnregisterDataListener(handler, MuseDataPacketType.EEG);
+                }
+
+                // If we've unregistered everything, disable data transmission
+                if (registeredWaveTypes == BrainWaveTypes.None)
+                {
+                    museDevice.EnableDataTransmission(false);
+                }
+
+                Debug.WriteLine($"Successfully unregistered from brain wave data: {waveTypes}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error unregistering from brain wave data: {ex.Message}");
+                ErrorOccurred?.Invoke(this, new BCIErrorEventArgs($"Error unregistering from brain wave data: {ex.Message}", ex));
+            }
+        }
+
+        /// <summary>
+        /// Gets the battery level as a percentage with improved error handling and debugging
+        /// </summary>
+        public async Task<double> GetBatteryLevelAsync()
+        {
+            if (!IsConnected)
+            {
+                Debug.WriteLine("GetBatteryLevelAsync: Device not connected");
+                return 0;
+            }
+
+            try
+            {
+                // Check if museDevice is null
+                if (museDevice == null)
+                {
+                    Debug.WriteLine("GetBatteryLevelAsync: museDevice is null");
+                    return 0;
+                }
+
+                // Add detailed logging
+                Debug.WriteLine("GetBatteryLevelAsync: Attempting to get configuration");
+
+                // Get the configuration with try/catch
+                var config = museDevice.GetMuseConfiguration();
+
+                // Check if config is null
+                if (config == null)
+                {
+                    Debug.WriteLine("GetBatteryLevelAsync: Configuration is null");
+                    return 0;
+                }
+
+                // Log the battery value
+                Debug.WriteLine($"GetBatteryLevelAsync: Battery level: {config.BatteryPercentRemaining}%");
+
+                // Ensure the value is within reasonable bounds (0-100)
+                double batteryLevel = Math.Clamp(config.BatteryPercentRemaining, 0, 100);
+                return batteryLevel;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error getting battery level: {ex.Message}");
+                Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+                ErrorOccurred?.Invoke(this, new BCIErrorEventArgs($"Error getting battery level: {ex.Message}", ex));
+
+                // Return a default value on error
+                return 0;
+            }
+        }
+
+        /// <summary>
+        /// Gets the signal quality as a value between 0 (poor) and 1 (excellent)
+        /// </summary>
+        public async Task<double> GetSignalQualityAsync()
+        {
+            if (!IsConnected)
+                return 0;
+
+            try
+            {
+                // Calculate signal quality from DRL/REF data or HSI_PRECISION if available
+                // This is a simplified implementation - in a real app, you would
+                // calculate this based on the electrode contact quality
+
+                // For now, just return a value based on the connection state
+                return IsConnected ? 0.8 : 0.0;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error getting signal quality: {ex.Message}");
+                return IsConnected ? 0.5 : 0.0; // Default to medium quality if connected
+            }
+        }
+
+        /// <summary>
+        /// Performs a simple diagnostic test of the device
+        /// </summary>
+        public async Task<string> PerformDiagnosticTestAsync()
+        {
+            if (!IsConnected)
+                return "Device not connected";
+
+            try
+            {
+                var result = new System.Text.StringBuilder();
+                result.AppendLine($"Device: {Name} ({DeviceId})");
+
+                // Check battery level
+                var battery = await GetBatteryLevelAsync();
+                result.AppendLine($"Battery: {battery:F1}%");
+
+                // Check signal quality
+                var quality = await GetSignalQualityAsync();
+                result.AppendLine($"Signal Quality: {quality:F2}");
+
+                // Get device configuration
+                var config = museDevice.GetMuseConfiguration();
+                result.AppendLine($"Headband Name: {config.HeadbandName}");
+                result.AppendLine($"Model: {config.Model}");
+                result.AppendLine($"EEG Channels: {config.EegChannelCount}");
+
+                return result.ToString();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error performing diagnostic test: {ex.Message}");
+                return $"Diagnostic error: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// Updates the connection state and raises the event
+        /// </summary>
+        internal void UpdateConnectionState(NeuroSpectator.Models.BCI.Common.ConnectionState newState)
+        {
+            if (connectionState == newState)
+                return;
+
+            var oldState = connectionState;
+            connectionState = newState;
+
+            Debug.WriteLine($"Device {Name} connection state changed: {oldState} → {newState}");
+
+            // Invoke the event on the main thread if dispatcher is provided
+            if (dispatcher != null)
+            {
+                dispatcher.Dispatch(() =>
+                    ConnectionStateChanged?.Invoke(this, new ConnectionStateChangedEventArgs(oldState, newState))
+                );
+            }
+            else
+            {
+                // Otherwise invoke directly
+                ConnectionStateChanged?.Invoke(this, new ConnectionStateChangedEventArgs(oldState, newState));
+            }
+        }
+
+        /// <summary>
+        /// Handles a brain wave data packet
+        /// </summary>
+        internal void HandleBrainWaveData(MuseDataPacket packet)
+        {
+            if (!IsConnected)
+                return;
+
+            try
+            {
+                // Convert the Muse data packet to our BrainWaveData format
+                BrainWaveData data = null;
+
+                // Validate and correct timestamp before using it
+                DateTimeOffset timestamp = SafeCreateDateTimeOffset(packet.Timestamp);
+
+                switch (packet.PacketType)
+                {
+                    case MuseDataPacketType.ALPHA_ABSOLUTE:
+                        data = BrainWaveData.CreateAlpha(packet.Values, timestamp);
+                        break;
+
+                    case MuseDataPacketType.BETA_ABSOLUTE:
+                        data = BrainWaveData.CreateBeta(packet.Values, timestamp);
+                        break;
+
+                    case MuseDataPacketType.DELTA_ABSOLUTE:
+                        data = BrainWaveData.CreateDelta(packet.Values, timestamp);
+                        break;
+
+                    case MuseDataPacketType.THETA_ABSOLUTE:
+                        data = BrainWaveData.CreateTheta(packet.Values, timestamp);
+                        break;
+
+                    case MuseDataPacketType.GAMMA_ABSOLUTE:
+                        data = BrainWaveData.CreateGamma(packet.Values, timestamp);
+                        break;
+
+                    case MuseDataPacketType.EEG:
+                        data = BrainWaveData.CreateRaw(packet.Values, timestamp);
+                        break;
+                }
+
+                if (data != null)
+                {
+                    // Dispatch to UI thread if we have a dispatcher
+                    if (dispatcher != null)
+                    {
+                        dispatcher.Dispatch(() =>
+                            BrainWaveDataReceived?.Invoke(this, new BrainWaveDataEventArgs(data))
+                        );
+                    }
+                    else
+                    {
+                        BrainWaveDataReceived?.Invoke(this, new BrainWaveDataEventArgs(data));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error handling brain wave data: {ex.Message}");
+                ErrorOccurred?.Invoke(this, new BCIErrorEventArgs($"Error handling brain wave data: {ex.Message}", ex));
+            }
+        }
+
+        private DateTimeOffset SafeCreateDateTimeOffset(long timestamp)
+        {
+            try
+            {
+                // If timestamp is a reasonable value, use it directly
+                // Unix timestamps are typically 13 digits for milliseconds
+                if (timestamp > 1000000000000 && timestamp < 10000000000000)
+                {
+                    return DateTimeOffset.FromUnixTimeMilliseconds(timestamp);
+                }
+
+                // For excessively large timestamps, it might be a raw device timestamp
+                // Let's avoid logging each one to prevent console spam
+                if (timestamp > 10000000000000)
+                {
+                    // No debug message here to avoid spam
+                    // Try to convert from whatever format to a reasonable one
+                    // The conversion method depends on how the device reports time
+
+                    // Option 1: Might be in microseconds or nanoseconds
+                    long milliseconds;
+                    if (timestamp > 1000000000000000) // Likely nanoseconds (more than 16 digits)
+                        milliseconds = timestamp / 1000000;
+                    else // Likely microseconds (around 16 digits)
+                        milliseconds = timestamp / 1000;
+
+                    // Verify the result makes sense (roughly within last 10 years)
+                    long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    long tenYearsMs = 10L * 365 * 24 * 60 * 60 * 1000;
+
+                    if (Math.Abs(nowMs - milliseconds) < tenYearsMs)
+                        return DateTimeOffset.FromUnixTimeMilliseconds(milliseconds);
+                }
+
+                // Fallback - use current time without logging to avoid spam
+                return DateTimeOffset.Now;
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                if (errorCount < 3)
+                {
+                    Debug.WriteLine($"Invalid timestamp value: {timestamp}, using current time instead");
+                    errorCount++;
+
+                    if (errorCount == 3)
+                        Debug.WriteLine("Suppressing further timestamp error messages...");
+                }
+
+                return DateTimeOffset.Now;
+            }
+        }
+
+        /// <summary>
+        /// Handles an artifact packet
+        /// </summary>
+        internal void HandleArtifact(MuseArtifactPacket packet)
+        {
+            if (!IsConnected)
+                return;
+
+            try
+            {
+                // Use the same safe timestamp creation method
+                DateTimeOffset timestamp = SafeCreateDateTimeOffset(packet.Timestamp);
+
+                var eventArgs = new ArtifactEventArgs(
+                    packet.Blink,
+                    packet.JawClench,
+                    !packet.HeadbandOn,
+                    timestamp);
+
+                // Rest of the method remains the same...
+                if (dispatcher != null)
+                {
+                    dispatcher.Dispatch(() =>
+                        ArtifactDetected?.Invoke(this, eventArgs)
+                    );
+                }
+                else
+                {
+                    ArtifactDetected?.Invoke(this, eventArgs);
+                }
+
+                // If the headband is too loose, report that to connection manager
+                if (!packet.HeadbandOn && connectionManager != null)
+                {
+                    NotifyDeviceWarning("Headband adjustment needed");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error handling artifact: {ex.Message}");
+                ErrorOccurred?.Invoke(this, new BCIErrorEventArgs($"Error handling artifact: {ex.Message}", ex));
+            }
+        }
+
+        /// <summary>
+        /// Waits for the connection state to change to the specified state
+        /// </summary>
+        private async Task<bool> WaitForConnectionStateAsync(NeuroSpectator.Models.BCI.Common.ConnectionState targetState, TimeSpan timeout)
+        {
+            var startTime = DateTime.Now;
+            var endTime = startTime + timeout;
+
+            while (DateTime.Now < endTime)
+            {
+                if (connectionState == targetState)
+                    return true;
+
+                // Use a short delay to avoid burning CPU
+                await Task.Delay(100);
+
+                // If we're waiting to connect and the state is NeedsUpdate or NeedsLicense, fail
+                if (targetState == NeuroSpectator.Models.BCI.Common.ConnectionState.Connected &&
+                    (connectionState == NeuroSpectator.Models.BCI.Common.ConnectionState.NeedsUpdate ||
+                     connectionState == NeuroSpectator.Models.BCI.Common.ConnectionState.NeedsLicense))
+                {
+                    return false;
+                }
+            }
+
+            return connectionState == targetState;
+        }
+
+        /// <summary>
+        /// Starts monitoring the connection status
+        /// </summary>
+        private void StartConnectionMonitoring()
+        {
+            // Cancel any existing monitoring
+            StopConnectionMonitoring();
+
+            // Create a new cancellation token source
+            monitoringCts = new CancellationTokenSource();
+
+            // Start connection monitoring task
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    while (!monitoringCts.IsCancellationRequested)
+                    {
+                        // Only check connection if we think we're connected
+                        if (IsConnected && museDevice != null)
+                        {
+                            try
+                            {
+                                // Check the actual Muse connection state
+                                var actualState = museDevice.GetConnectionState();
+                                if (actualState != Core.ConnectionState.CONNECTED)
+                                {
+                                    Debug.WriteLine($"Connection monitor detected device disconnection: {actualState}");
+
+                                    // Update our state
+                                    UpdateConnectionState(NeuroSpectator.Models.BCI.Common.ConnectionState.Disconnected);
+
+                                    // Try to reconnect if appropriate
+                                    await TryReconnectAsync();
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Debug.WriteLine($"Error checking connection state: {ex.Message}");
+                            }
+                        }
+
+                        // Check every 2 seconds
+                        await Task.Delay(2000, monitoringCts.Token);
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    // Normal cancellation, ignore
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error in connection monitoring: {ex.Message}");
+                }
+            }, monitoringCts.Token);
+        }
+
+        /// <summary>
+        /// Stops connection monitoring
+        /// </summary>
+        private void StopConnectionMonitoring()
+        {
+            if (monitoringCts != null)
+            {
+                monitoringCts.Cancel();
+                monitoringCts.Dispose();
+                monitoringCts = null;
+            }
+        }
+
+        /// <summary>
+        /// Verifies that the connection to the device is working properly
+        /// </summary>
+        /// <returns>True if the connection is verified, false otherwise</returns>
+        public async Task<bool> VerifyConnectionAsync()
+        {
+            try
+            {
+                // Check if the device is connected
+                if (!IsConnected)
+                {
                     return false;
                 }
 
-                // Brief delay to wait for initial data
-                await Task.Delay(1000);
+                // Perform a basic command to verify the connection
+                // This will depend on your specific device and SDK
+                // For example, try to get the battery level
+                double batteryLevel = await GetBatteryLevelAsync();
 
+                // If we got here without an exception, the connection is working
                 return true;
             }
             catch (Exception ex)
@@ -805,236 +965,172 @@ namespace NeuroSpectator.Services.BCI.Muse
         }
 
         /// <summary>
-        /// Receives a data packet from the Muse device
+        /// Gets detailed information about the device
         /// </summary>
-        public void ReceiveMuseDataPacket(MuseDataPacket packet, NeuroSpectator.Services.BCI.Muse.Core.Muse muse)
+        /// <returns>A dictionary of device details</returns>
+        public Dictionary<string, string> GetDeviceDetails()
         {
+            Dictionary<string, string> details = new Dictionary<string, string>
+    {
+        { "Name", Name },
+        { "DeviceId", DeviceId },
+        { "DeviceType", DeviceType.ToString() },
+        { "ConnectionState", ConnectionState.ToString() }
+    };
+
+            // Add more device-specific details if available
+            // This will depend on your specific device and SDK
+
+            return details;
+        }
+
+        /// <summary>
+        /// Attempts to reconnect to the device
+        /// </summary>
+        private async Task TryReconnectAsync()
+        {
+            // Don't reconnect if we're disposed or have exceeded max attempts
+            if (isDisposed || reconnectAttempts >= MaxReconnectAttempts)
+                return;
+
             try
             {
-                if (packetTypeMapping.TryGetValue(packet.PacketType, out BrainWaveTypes waveType))
+                reconnectAttempts++;
+                Debug.WriteLine($"Attempting to reconnect ({reconnectAttempts}/{MaxReconnectAttempts})...");
+
+                // Notify connection manager
+                if (connectionManager != null)
                 {
-                    if (waveType != BrainWaveTypes.None)
-                    {
-                        // Create a safe timestamp - handle potential out-of-range values
-                        DateTimeOffset timestamp;
-                        try
-                        {
-                            // Check if timestamp is within valid range for DateTimeOffset
-                            const long minTimestamp = -62135596800000; // DateTimeOffset.MinValue in milliseconds
-                            const long maxTimestamp = 253402300799999; // DateTimeOffset.MaxValue in milliseconds
-
-                            if (packet.Timestamp < minTimestamp || packet.Timestamp > maxTimestamp)
-                            {
-                                timestamp = DateTimeOffset.Now;
-                                Console.WriteLine($"Warning: Invalid timestamp {packet.Timestamp} (out of range), using current time");
-                            }
-                            else
-                            {
-                                timestamp = DateTimeOffset.FromUnixTimeMilliseconds(packet.Timestamp);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            // Use current time if the device timestamp is invalid
-                            timestamp = DateTimeOffset.Now;
-                            Console.WriteLine($"Warning: Error converting timestamp {packet.Timestamp}: {ex.Message}, using current time");
-                        }
-
-                        // Validate channel values
-                        double[] validatedValues = packet.Values;
-                        if (validatedValues != null)
-                        {
-                            // Check for NaN and Infinity values and replace them
-                            for (int i = 0; i < validatedValues.Length; i++)
-                            {
-                                if (double.IsNaN(validatedValues[i]) || double.IsInfinity(validatedValues[i]))
-                                {
-                                    validatedValues[i] = 0.0;
-                                    Console.WriteLine($"Warning: Invalid value at index {i} replaced with 0.0");
-                                }
-                            }
-                        }
-
-                        var brainWaveData = new BrainWaveData(
-                            waveType,
-                            validatedValues ?? Array.Empty<double>(), // Ensure we never pass null
-                            timestamp
-                        );
-
-                        BrainWaveDataReceived?.Invoke(this, new BrainWaveDataEventArgs(brainWaveData));
-                    }
+                    NotifyReconnecting();
                 }
+
+                // Try to reconnect
+                await ConnectAsync();
             }
             catch (Exception ex)
             {
-                // Log detailed information about the exception
-                Console.WriteLine($"Error in ReceiveMuseDataPacket: {ex.Message}");
-                Console.WriteLine($"PacketType: {packet.PacketType}, Timestamp: {packet.Timestamp}");
-                Console.WriteLine($"Values: {(packet.Values != null ? string.Join(", ", packet.Values) : "null")}");
+                Debug.WriteLine($"Reconnection attempt failed: {ex.Message}");
 
-                ErrorOccurred?.Invoke(this, new BCIErrorEventArgs(
-                    $"Error processing data packet: {ex.Message}",
-                    ex,
-                    BCIErrorType.Unknown));
+                if (reconnectAttempts >= MaxReconnectAttempts)
+                {
+                    Debug.WriteLine("Maximum reconnection attempts reached");
+
+                    // Notify connection manager
+                    if (connectionManager != null)
+                    {
+                        NotifyConnectionFailed("Maximum reconnection attempts reached");
+                    }
+                }
             }
         }
 
         /// <summary>
-        /// Receives an artifact packet from the Muse device
+        /// Notifies the connection manager that the device is connecting
         /// </summary>
-        public void ReceiveMuseArtifactPacket(MuseArtifactPacket packet, NeuroSpectator.Services.BCI.Muse.Core.Muse muse)
+        private void NotifyConnecting()
         {
             try
             {
-                // Create a safe timestamp - handle potential out-of-range values
-                DateTimeOffset timestamp;
-                try
-                {
-                    // Check if timestamp is within valid range for DateTimeOffset
-                    const long minTimestamp = -62135596800000; // DateTimeOffset.MinValue in milliseconds
-                    const long maxTimestamp = 253402300799999; // DateTimeOffset.MaxValue in milliseconds
-
-                    if (packet.Timestamp < minTimestamp || packet.Timestamp > maxTimestamp)
-                    {
-                        timestamp = DateTimeOffset.Now;
-                        Console.WriteLine($"Warning: Invalid artifact timestamp {packet.Timestamp} (out of range), using current time");
-                    }
-                    else
-                    {
-                        timestamp = DateTimeOffset.FromUnixTimeMilliseconds(packet.Timestamp);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // Use current time if the device timestamp is invalid
-                    timestamp = DateTimeOffset.Now;
-                    Console.WriteLine($"Warning: Error converting artifact timestamp {packet.Timestamp}: {ex.Message}, using current time");
-                }
-
-                ArtifactDetected?.Invoke(this, new ArtifactEventArgs(
-                    packet.Blink,
-                    packet.JawClench,
-                    !packet.HeadbandOn,
-                    timestamp
-                ));
+                connectionManager?.RegisterDevice(this);
             }
             catch (Exception ex)
             {
-                // Log detailed information about the exception
-                Console.WriteLine($"Error in ReceiveMuseArtifactPacket: {ex.Message}");
-
-                ErrorOccurred?.Invoke(this, new BCIErrorEventArgs(
-                    $"Error processing artifact packet: {ex.Message}",
-                    ex,
-                    BCIErrorType.Unknown));
+                Debug.WriteLine($"Error in NotifyConnecting: {ex.Message}");
             }
         }
 
         /// <summary>
-        /// Receives an error from the Muse device
+        /// Notifies the connection manager that the device is connected
         /// </summary>
-        public void ReceiveError(MuseError error, NeuroSpectator.Services.BCI.Muse.Core.Muse muse)
+        private void NotifyConnected()
         {
             try
             {
-                Console.WriteLine($"[ERROR] Received Muse error: Type={error.Type}, Code={error.Code}, Info={error.Info}");
-
-                // Create more user-friendly error details
-                string errorDetails = $"Muse device error - Type: {error.Type}, Code: {error.Code}";
-                string recoveryAction = "Unknown";
-
-                // Map the error type
-                BCIErrorType errorType;
-                bool attemptRecovery = false;
-
-                switch ((int)error.Type)
-                {
-                    case 0: // FAILURE
-                        errorType = BCIErrorType.ConnectionFailed;
-                        errorDetails += " - General failure";
-                        recoveryAction = "Try disconnecting and reconnecting";
-                        attemptRecovery = true;
-                        break;
-
-                    case 1: // TIMEOUT
-                        errorType = BCIErrorType.ConnectionFailed;
-                        errorDetails += " - Operation timeout";
-                        recoveryAction = "Check device is powered on and in range";
-                        attemptRecovery = true;
-                        break;
-
-                    case 2: // OVERLOADED
-                        errorType = BCIErrorType.DeviceDisconnected;
-                        errorDetails += " - Device overloaded";
-                        recoveryAction = "Try restarting the device";
-                        attemptRecovery = true;
-                        break;
-
-                    case 3: // UNIMPLEMENTED
-                        errorType = BCIErrorType.DeviceNotSupported;
-                        errorDetails += " - Feature not implemented";
-                        recoveryAction = "Check device compatibility";
-                        attemptRecovery = false;
-                        break;
-
-                    default:
-                        errorType = BCIErrorType.Unknown;
-                        break;
-                }
-
-                Console.WriteLine($"Error details: {errorDetails}");
-                Console.WriteLine($"Recommended action: {recoveryAction}");
-
-                // If error during connection, attempt recovery
-                if (isConnecting && attemptRecovery)
-                {
-                    Console.WriteLine("Error during connection, attempting recovery");
-
-                    try
-                    {
-                        // Reset and disconnect
-                        museDevice.EnableDataTransmission(false);
-                        museDevice.UnregisterAllListeners();
-                        museDevice.Disconnect();
-
-                        Console.WriteLine("Recovery disconnect completed");
-                    }
-                    catch (Exception innerEx)
-                    {
-                        Console.WriteLine($"Recovery failed: {innerEx.Message}");
-                    }
-                }
-
-                // Notify subscribers about the error
-                ErrorOccurred?.Invoke(this, new BCIErrorEventArgs(
-                    $"{errorDetails}. {error.Info}. {recoveryAction}",
-                    null,
-                    errorType));
+                // Additional logic can be added here if needed
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error handling Muse error: {ex.Message}");
+                Debug.WriteLine($"Error in NotifyConnected: {ex.Message}");
             }
         }
 
         /// <summary>
-        /// Maps a Muse connection state to a generic connection state
+        /// Notifies the connection manager that the device is disconnected
         /// </summary>
-        private static BCIConnectionState MapConnectionState(MuseConnectionState state)
+        private void NotifyDisconnected()
         {
-            return state switch
+            try
             {
-                MuseConnectionState.CONNECTED => BCIConnectionState.Connected,
-                MuseConnectionState.CONNECTING => BCIConnectionState.Connecting,
-                MuseConnectionState.DISCONNECTED => BCIConnectionState.Disconnected,
-                MuseConnectionState.NEEDS_UPDATE => BCIConnectionState.NeedsUpdate,
-                MuseConnectionState.NEEDS_LICENSE => BCIConnectionState.NeedsLicense,
-                _ => BCIConnectionState.Unknown
-            };
+                // Additional logic can be added here if needed
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error in NotifyDisconnected: {ex.Message}");
+            }
         }
 
         /// <summary>
-        /// Disposes of the Muse device
+        /// Notifies the connection manager that the device connection failed
+        /// </summary>
+        private void NotifyConnectionFailed(string reason)
+        {
+            try
+            {
+                // Additional logic can be added here if needed
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error in NotifyConnectionFailed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Notifies the connection manager that the device is reconnecting
+        /// </summary>
+        private void NotifyReconnecting()
+        {
+            try
+            {
+                // Additional logic can be added here if needed
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error in NotifyReconnecting: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Notifies the connection manager of a device error
+        /// </summary>
+        private void NotifyDeviceError(string errorMessage)
+        {
+            try
+            {
+                // Additional logic can be added here if needed
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error in NotifyDeviceError: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Notifies the connection manager of a device warning
+        /// </summary>
+        private void NotifyDeviceWarning(string warningMessage)
+        {
+            try
+            {
+                // Additional logic can be added here if needed
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error in NotifyDeviceWarning: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Disposes of resources
         /// </summary>
         public void Dispose()
         {
@@ -1043,7 +1139,7 @@ namespace NeuroSpectator.Services.BCI.Muse
         }
 
         /// <summary>
-        /// Disposes of the Muse device
+        /// Disposes of resources
         /// </summary>
         protected virtual void Dispose(bool disposing)
         {
@@ -1051,22 +1147,206 @@ namespace NeuroSpectator.Services.BCI.Muse
             {
                 if (disposing)
                 {
-                    try
-                    {
-                        // Make sure we're disconnected
-                        DisconnectAsync().Wait();
+                    // Stop connection monitoring
+                    StopConnectionMonitoring();
 
-                        // Clean up the semaphore
-                        connectionSemaphore.Dispose();
-                    }
-                    catch (Exception ex)
+                    // Disconnect from the device
+                    if (IsConnected || ConnectionState == NeuroSpectator.Models.BCI.Common.ConnectionState.Connecting)
                     {
-                        Console.WriteLine($"Error during disposal: {ex.Message}");
+                        try
+                        {
+                            DisconnectAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+                        }
+                        catch
+                        {
+                            // Ignore exceptions during disposal
+                        }
                     }
+
+                    if (museDevice != null)
+                    {
+                        try
+                        {
+                            museDevice.UnregisterAllListeners();
+                        }
+                        catch
+                        {
+                            // Ignore exceptions during disposal
+                        }
+                        museDevice = null;
+                    }
+
+                    // Dispose of semaphore
+                    connectionSemaphore.Dispose();
                 }
 
                 isDisposed = true;
             }
         }
+
+        #region Muse API Event Handlers
+
+        /// <summary>
+        /// Handler for Muse connection events
+        /// </summary>
+        private class MuseConnectionHandler : IMuseConnectionListener
+        {
+            private readonly MuseDevice device;
+
+            public MuseConnectionHandler(MuseDevice device)
+            {
+                this.device = device;
+            }
+
+            public void ReceiveMuseConnectionPacket(MuseConnectionPacket packet, Core.Muse muse)
+            {
+                try
+                {
+                    // Map the Muse connection state to our connection state
+                    NeuroSpectator.Models.BCI.Common.ConnectionState newState;
+
+                    switch (packet.CurrentConnectionState)
+                    {
+                        case Core.ConnectionState.CONNECTED:
+                            newState = NeuroSpectator.Models.BCI.Common.ConnectionState.Connected;
+                            break;
+                        case Core.ConnectionState.CONNECTING:
+                            newState = NeuroSpectator.Models.BCI.Common.ConnectionState.Connecting;
+                            break;
+                        case Core.ConnectionState.DISCONNECTED:
+                            newState = NeuroSpectator.Models.BCI.Common.ConnectionState.Disconnected;
+                            break;
+                        case Core.ConnectionState.NEEDS_UPDATE:
+                            newState = NeuroSpectator.Models.BCI.Common.ConnectionState.NeedsUpdate;
+                            break;
+                        case Core.ConnectionState.NEEDS_LICENSE:
+                            newState = NeuroSpectator.Models.BCI.Common.ConnectionState.NeedsLicense;
+                            break;
+                        default:
+                            newState = NeuroSpectator.Models.BCI.Common.ConnectionState.Unknown;
+                            break;
+                    }
+
+                    // Update our state
+                    device.UpdateConnectionState(newState);
+
+                    // If state changed to disconnected, try to reconnect
+                    if (newState == NeuroSpectator.Models.BCI.Common.ConnectionState.Disconnected &&
+                        packet.PreviousConnectionState == Core.ConnectionState.CONNECTED)
+                    {
+                        // Use Task.Run to avoid blocking the callback
+                        Task.Run(() => device.TryReconnectAsync());
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error handling connection packet: {ex.Message}");
+                    device.ErrorOccurred?.Invoke(device, new BCIErrorEventArgs($"Error handling connection packet: {ex.Message}", ex));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Handler for Muse data events
+        /// </summary>
+        private class MuseDataHandler : IMuseDataListener
+        {
+            private readonly MuseDevice device;
+
+            public MuseDataHandler(MuseDevice device)
+            {
+                this.device = device;
+            }
+
+            public void ReceiveMuseDataPacket(MuseDataPacket packet, Core.Muse muse)
+            {
+                device.HandleBrainWaveData(packet);
+            }
+
+            public void ReceiveMuseArtifactPacket(MuseArtifactPacket packet, Core.Muse muse)
+            {
+                device.HandleArtifact(packet);
+            }
+        }
+
+        /// <summary>
+        /// Handler for Muse error events
+        /// </summary>
+        private class MuseErrorHandler : IMuseErrorListener
+        {
+            private readonly MuseDevice device;
+
+            public MuseErrorHandler(MuseDevice device)
+            {
+                this.device = device;
+            }
+
+            public void ReceiveError(MuseError packet, Core.Muse muse)
+            {
+                try
+                {
+                    // Map the error type
+                    BCIErrorType errorType;
+
+                    switch (packet.Type)
+                    {
+                        case ErrorType.FAILURE:
+                            errorType = BCIErrorType.Unknown;
+                            break;
+                        case ErrorType.TIMEOUT:
+                            errorType = BCIErrorType.ConnectionFailed;
+                            break;
+                        case ErrorType.OVERLOADED:
+                        case ErrorType.UNIMPLEMENTED:
+                        default:
+                            errorType = BCIErrorType.Unknown;
+                            break;
+                    }
+
+                    string errorMessage = $"Muse error: {packet.Info} (Code: {packet.Code}, Type: {packet.Type})";
+                    Debug.WriteLine(errorMessage);
+
+                    // Notify connection manager if available
+                    if (device.connectionManager != null)
+                    {
+                        device.NotifyDeviceError(errorMessage);
+                    }
+
+                    // Raise the error event
+                    device.ErrorOccurred?.Invoke(device, new BCIErrorEventArgs(
+                        errorMessage,
+                        null,
+                        errorType));
+
+                    // If we get an error and the device is marked as connected, check its actual state
+                    if (device.IsConnected)
+                    {
+                        try
+                        {
+                            var state = device.museDevice.GetConnectionState();
+                            if (state != Core.ConnectionState.CONNECTED)
+                            {
+                                // Update our state
+                                device.UpdateConnectionState(NeuroSpectator.Models.BCI.Common.ConnectionState.Disconnected);
+
+                                // Try to reconnect
+                                Task.Run(() => device.TryReconnectAsync());
+                            }
+                        }
+                        catch
+                        {
+                            // If we can't check the state, assume disconnected
+                            device.UpdateConnectionState(NeuroSpectator.Models.BCI.Common.ConnectionState.Disconnected);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error handling Muse error: {ex.Message}");
+                }
+            }
+        }
+
+        #endregion
     }
 }
