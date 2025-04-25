@@ -580,9 +580,9 @@ namespace NeuroSpectator.Services.BCI.Muse
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error getting battery level: {ex.Message}");
+                //Debug.WriteLine($"Error getting battery level: {ex.Message}");
                 Debug.WriteLine($"Stack trace: {ex.StackTrace}");
-                ErrorOccurred?.Invoke(this, new BCIErrorEventArgs($"Error getting battery level: {ex.Message}", ex));
+                //ErrorOccurred?.Invoke(this, new BCIErrorEventArgs($"Error getting battery level: {ex.Message}", ex));
 
                 // Return a default value on error
                 return 0;

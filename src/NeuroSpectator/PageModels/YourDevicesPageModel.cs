@@ -454,7 +454,7 @@ namespace NeuroSpectator.PageModels
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"Error getting device details: {ex.Message}");
+                        //Debug.WriteLine($"Error getting device details: {ex.Message}");
                     }
 
                     // Try to get battery level with fallback
@@ -464,7 +464,7 @@ namespace NeuroSpectator.PageModels
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"Error getting battery level: {ex.Message}");
+                        //Debug.WriteLine($"Error getting battery level: {ex.Message}");
                         BatteryPercent = 50; // Use default value
                     }
                 }

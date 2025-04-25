@@ -66,6 +66,9 @@ namespace NeuroSpectator.PageModels
         [ObservableProperty]
         private string playPauseButtonText = "Play";
 
+        [ObservableProperty]
+        private string streamId;
+
         #endregion
 
         #region Commands
@@ -123,16 +126,23 @@ namespace NeuroSpectator.PageModels
             {
                 if (!IsInitialized)
                 {
-                    // Get the stream ID from navigation parameters
-                    string streamId = await GetStreamIdFromNavigationAsync();
-                    if (string.IsNullOrEmpty(streamId))
+                    // Use the StreamId that was set from the query parameter
+                    if (string.IsNullOrEmpty(StreamId))
+                    {
+                        // As a fallback, try to get it from navigation
+                        StreamId = await GetStreamIdFromNavigationAsync();
+                    }
+
+                    if (string.IsNullOrEmpty(StreamId))
                     {
                         SetError("No stream ID specified");
                         return;
                     }
 
+                    Debug.WriteLine($"Initializing player with stream ID: {StreamId}");
+
                     // Load the stream information
-                    await LoadStreamAsync(streamId);
+                    await LoadStreamAsync(StreamId);
 
                     IsInitialized = true;
                 }
@@ -164,10 +174,7 @@ namespace NeuroSpectator.PageModels
         }
 
         /// <summary>
-        /// Gets the stream ID from navigation parameters
-        /// </summary>
-        /// <summary>
-        /// Gets the stream ID from navigation parameters
+        /// Gets the stream ID from navigation parameters as a fallback mechanism
         /// </summary>
         private async Task<string> GetStreamIdFromNavigationAsync()
         {
@@ -175,43 +182,53 @@ namespace NeuroSpectator.PageModels
             {
                 // Get the current query string
                 var queryString = Shell.Current.CurrentState?.Location?.Query;
+
                 if (!string.IsNullOrEmpty(queryString))
                 {
-                    // Parse the query string
-                    var queryDictionary = System.Web.HttpUtility.ParseQueryString(queryString);
-                    var streamId = queryDictionary["streamId"];
-
-                    if (!string.IsNullOrEmpty(streamId))
+                    // Simple parsing approach for query string
+                    if (queryString.Contains("streamId="))
                     {
-                        Debug.WriteLine($"Found stream ID in query: {streamId}");
+                        int start = queryString.IndexOf("streamId=") + "streamId=".Length;
+                        int end = queryString.IndexOf('&', start);
+                        string streamId = end > 0 && end > start ?
+                            queryString.Substring(start, end - start) :
+                            queryString.Substring(start);
+
+                        // Decode the value
+                        streamId = Uri.UnescapeDataString(streamId);
+                        Debug.WriteLine($"Found stream ID in query string: {streamId}");
                         return streamId;
                     }
                 }
 
-                // Alternative approach: parse from the full URL if query parsing failed
-                var fullUrl = Shell.Current.CurrentState?.Location?.ToString();
-                if (!string.IsNullOrEmpty(fullUrl) && fullUrl.Contains("streamId="))
+                // Try to get from the full URI path if query parsing failed
+                var fullPath = Shell.Current.CurrentState?.Location?.ToString();
+                if (!string.IsNullOrEmpty(fullPath))
                 {
-                    var parts = fullUrl.Split(new[] { "streamId=" }, StringSplitOptions.None);
-                    if (parts.Length > 1)
+                    // Check for presence of streamId parameter
+                    if (fullPath.Contains("?streamId="))
                     {
-                        var streamId = parts[1];
-                        if (streamId.Contains("&"))
-                        {
-                            streamId = streamId.Split('&')[0];
-                        }
+                        int start = fullPath.IndexOf("?streamId=") + "?streamId=".Length;
+                        int end = fullPath.IndexOf('&', start);
+                        string streamId = end > 0 && end > start ?
+                            fullPath.Substring(start, end - start) :
+                            fullPath.Substring(start);
 
-                        Debug.WriteLine($"Found stream ID in URL: {streamId}");
+                        // Decode the value
+                        streamId = Uri.UnescapeDataString(streamId);
+                        Debug.WriteLine($"Found stream ID in full path: {streamId}");
                         return streamId;
                     }
                 }
 
-                // If we get here, no stream ID was found
+                // If still don't have a stream ID, the user might have navigated 
+                // to this page without parameters
+                Debug.WriteLine("No stream ID found in navigation parameters");
                 return string.Empty;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error getting stream ID: {ex.Message}");
+                Debug.WriteLine($"Error getting stream ID from navigation: {ex.Message}");
                 return string.Empty;
             }
         }

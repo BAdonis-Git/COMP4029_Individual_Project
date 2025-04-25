@@ -42,9 +42,30 @@ namespace NeuroSpectator.Pages
             {
                 base.OnAppearing();
 
-                // Initialize the page when it appears
+                // Handle query parameters here instead of in constructor
                 if (_viewModel != null)
                 {
+                    // Parse the query string to extract streamId
+                    var uri = Shell.Current.CurrentState?.Location;
+                    if (uri?.Query != null)
+                    {
+                        var queryString = uri.Query;
+                        if (queryString.Contains("streamId="))
+                        {
+                            int start = queryString.IndexOf("streamId=") + "streamId=".Length;
+                            int end = queryString.IndexOf('&', start);
+                            string streamId = end > start ?
+                                queryString.Substring(start, end - start) :
+                                queryString.Substring(start);
+
+                            // Decode and set the stream ID
+                            streamId = Uri.UnescapeDataString(streamId);
+                            Debug.WriteLine($"OnAppearing: Found stream ID in query: {streamId}");
+                            _viewModel.StreamId = streamId;
+                        }
+                    }
+
+                    // Now initialize the view model
                     await _viewModel.OnAppearingAsync();
                 }
             }

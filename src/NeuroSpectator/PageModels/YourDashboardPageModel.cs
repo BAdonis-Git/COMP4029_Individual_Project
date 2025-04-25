@@ -354,11 +354,14 @@ namespace NeuroSpectator.PageModels
             {
                 Debug.WriteLine($"Opening stream: {stream.Id}, Title: {stream.Title}");
 
-                // Navigation parameters
-                var queryString = $"?streamId={Uri.EscapeDataString(stream.Id)}";
+                // Better approach - use query parameters directly
+                var navigationParameter = new Dictionary<string, object>
+        {
+            { "streamId", stream.Id }
+        };
 
                 // Navigate to the stream viewer page with the stream ID
-                await Shell.Current.GoToAsync($"//StreamSpectatorPage{queryString}");
+                await Shell.Current.GoToAsync("StreamSpectatorPage", navigationParameter);
             }
             catch (Exception ex)
             {
@@ -526,13 +529,13 @@ namespace NeuroSpectator.PageModels
                     // Try to get battery level
                     try
                     {
-                        Debug.WriteLine("Dashboard: Getting battery level");
+                        //Debug.WriteLine("Dashboard: Getting battery level");
                         BatteryPercent = await deviceManager.CurrentDevice.GetBatteryLevelAsync();
-                        Debug.WriteLine($"Dashboard: Battery level: {BatteryPercent}%");
+                        //Debug.WriteLine($"Dashboard: Battery level: {BatteryPercent}%");
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"Error getting battery level: {ex.Message}");
+                        //Debug.WriteLine($"Error getting battery level: {ex.Message}");
                         BatteryPercent = 75; // Use default value
                     }
                 }

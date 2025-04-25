@@ -707,6 +707,9 @@ namespace NeuroSpectator.PageModels
                 {
                     await RefreshObsInfoAsync();
 
+                    // Verify preview template before setting up preview
+                    await VerifyPreviewTemplateExistsAsync();
+
                     // Set up preview URL
                     await SetupVirtualCameraPreviewAsync();
 
@@ -913,7 +916,13 @@ namespace NeuroSpectator.PageModels
                 // Ensure the visualization server is running
                 if (!visualizationService.IsServerRunning)
                 {
+                    Debug.WriteLine("Starting visualization server...");
                     await visualizationService.StartServerAsync();
+                    Debug.WriteLine($"Visualization server started at: {visualizationService.VisualisationUrl}");
+                }
+                else
+                {
+                    Debug.WriteLine($"Visualization server already running at: {visualizationService.VisualisationUrl}");
                 }
 
                 // Ensure the preview template is available
@@ -946,21 +955,15 @@ namespace NeuroSpectator.PageModels
                     return;
                 }
 
-                // Get the current status directly from OBS
+                // Add debug output
                 bool isActive = await obsService.IsVirtualCameraActiveAsync();
+                Debug.WriteLine($"Virtual camera active status from OBS: {isActive}");
 
-                // Only update if different to avoid unnecessary UI updates
-                if (IsVirtualCameraActive != isActive)
-                {
-                    Debug.WriteLine($"Updating virtual camera status: {isActive}");
-                    IsVirtualCameraActive = isActive;
-                    OnPropertyChanged(nameof(IsVirtualCameraActive));
-                }
+                IsVirtualCameraActive = isActive;
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"Error checking virtual camera status: {ex.Message}");
-                // Don't update the status message to avoid confusion
             }
         }
 
@@ -1006,17 +1009,75 @@ namespace NeuroSpectator.PageModels
                     StatusMessage = "Virtual camera started";
                 }
 
-                // Refresh the preview to show the camera status
-                PreviewUrl = $"{visualizationService.GetPreviewUrl()}?refresh={DateTime.Now.Ticks}";
-
                 // Force UI to update the button state
                 OnPropertyChanged(nameof(IsVirtualCameraActive));
+
+                // Force refresh of the preview by changing the URL with a timestamp
+                string baseUrl = visualizationService.GetPreviewUrl();
+                PreviewUrl = $"{baseUrl}?refresh={DateTime.Now.Ticks}";
+
+                // Log the new URL
+                Debug.WriteLine($"Refreshing preview with URL: {PreviewUrl}");
+
+                // Make sure preview is visible
+                IsPreviewAvailable = true;
+
+                // Wait a short time and then refresh again to ensure the WebView updates
+                await Task.Delay(500);
+                PreviewUrl = $"{baseUrl}?refresh={DateTime.Now.Ticks + 1}";
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"Error toggling virtual camera: {ex.Message}");
                 Debug.WriteLine($"Stack trace: {ex.StackTrace}");
                 StatusMessage = $"Error toggling virtual camera: {ex.Message}";
+            }
+        }
+
+        private async Task VerifyPreviewTemplateExistsAsync()
+        {
+            try
+            {
+                // Get the visualization directory path
+                string visualizationDirectory = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "NeuroSpectator", "Visualisations");
+
+                // Check if the directory exists
+                if (!Directory.Exists(visualizationDirectory))
+                {
+                    Debug.WriteLine($"ERROR: Visualization directory doesn't exist: {visualizationDirectory}");
+                    StatusMessage = "Preview error: Visualization directory not found";
+                    return;
+                }
+
+                // Check if the preview file exists
+                string previewFilePath = Path.Combine(visualizationDirectory, "obs_preview.html");
+                bool fileExists = File.Exists(previewFilePath);
+
+                Debug.WriteLine($"Preview template file exists: {fileExists}");
+                if (fileExists)
+                {
+                    Debug.WriteLine($"Preview file size: {new FileInfo(previewFilePath).Length} bytes");
+                    // Optionally read the first few lines to verify content
+                    string firstFewLines = string.Join("\n", File.ReadLines(previewFilePath).Take(5));
+                    Debug.WriteLine($"Preview file content starts with: \n{firstFewLines}");
+                }
+                else
+                {
+                    // If file doesn't exist, try to create it manually
+                    Debug.WriteLine("Creating preview template file manually...");
+                    await visualizationService.EnsureOBSPreviewTemplateAvailableAsync();
+
+                    // Check again after attempted creation
+                    fileExists = File.Exists(previewFilePath);
+                    Debug.WriteLine($"Preview template now exists: {fileExists}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error verifying preview template: {ex.Message}");
+                StatusMessage = $"Preview error: {ex.Message}";
             }
         }
 
@@ -1027,8 +1088,7 @@ namespace NeuroSpectator.PageModels
         {
             Debug.WriteLine($"Checking if RTMP endpoint is ready: {rtmpUrl}");
 
-            // Can't directly ping an RTMP endpoint from C#, try to validate the URL format
-            // and check if the hostname resolves
+            // Ttry to validate the URL format and check if the hostname resolves
             try
             {
                 // Parse the RTMP URL
@@ -1037,8 +1097,8 @@ namespace NeuroSpectator.PageModels
                 // Check if we can resolve the hostname
                 var hostEntry = await Dns.GetHostEntryAsync(uri.Host);
 
-                // For RTMP we would typically need a more sophisticated check,
-                // but for now, we'll assume if the host resolves, it's potentially valid
+                // For RTMP need a more sophisticated check,
+                // For now assume if the host resolves, it's potentially valid
                 Debug.WriteLine($"RTMP host {uri.Host} resolved successfully");
 
                 // To improve:
@@ -1267,11 +1327,7 @@ namespace NeuroSpectator.PageModels
                             {
                                 try
                                 {
-                                    // For MVP, we'll just add a delay - in a real implementation, we'd actually check the endpoint
-                                    // isRtmpEndpointReady = await IsRtmpEndpointReadyAsync(stream.IngestUrl);
-
-                                    // For now, add a delay to give the RTMP endpoint time to become ready
-                                    await Task.Delay(rtmpCheckIntervalMs);
+                                    isRtmpEndpointReady = await IsRtmpEndpointReadyAsync(stream.IngestUrl);
 
                                     // Since we can't actually check the RTMP endpoint directly,
                                     // we'll assume it's ready after the first retry

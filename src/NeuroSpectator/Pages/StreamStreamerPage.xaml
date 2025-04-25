@@ -253,9 +253,9 @@
                     <Grid Grid.Row="1">
                         <!-- Preview WebView -->
                         <WebView Source="{Binding PreviewUrl}"
-                 	IsVisible="{Binding IsPreviewAvailable}"
-                 	VerticalOptions="FillAndExpand"
-                 	HorizontalOptions="FillAndExpand"/>
+                             IsVisible="{Binding IsPreviewAvailable}"
+                             VerticalOptions="FillAndExpand"
+                             HorizontalOptions="FillAndExpand"/>
 
                         <!-- Loading indicator -->
                         <ActivityIndicator IsRunning="{Binding IsConnectedToObs}"
