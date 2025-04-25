@@ -289,6 +289,12 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
             return MuseConfiguration.FromJson(json);
         }
 
+        public MuseVersion GetMuseVersion()
+        {
+            var json = Native.GetMuseVersion(BluetoothMac);
+            return MuseVersion.FromJson(json);
+        }
+
         public ConnectionState GetConnectionState()
         {
             return Native.GetConnectionState(BluetoothMac);

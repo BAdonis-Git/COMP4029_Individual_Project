@@ -7,6 +7,7 @@ using NeuroSpectator.Models.BCI.Muse;
 using NeuroSpectator.Services.BCI.Interfaces;
 using NeuroSpectator.Services.BCI.Muse.Core;
 using Microsoft.Maui.Dispatching;
+using ConnectionState = NeuroSpectator.Models.BCI.Common.ConnectionState;
 
 namespace NeuroSpectator.Services.BCI.Muse
 {
@@ -25,6 +26,10 @@ namespace NeuroSpectator.Services.BCI.Muse
         private const int MaxReconnectAttempts = 3;
         private readonly SemaphoreSlim connectionSemaphore = new SemaphoreSlim(1, 1);
         private CancellationTokenSource monitoringCts;
+        private MuseConfiguration cachedConfiguration;
+        private string firmwareVersion;
+        private MuseConnectionHandler connectionHandler;
+        private double cachedBatteryLevel = -1;
 
         // Track registered data types for reconnection
         private BrainWaveTypes registeredWaveTypes = BrainWaveTypes.None;
@@ -81,7 +86,7 @@ namespace NeuroSpectator.Services.BCI.Muse
         }
 
         /// <summary>
-        /// Connects to the device asynchronously with robust error handling
+        /// Connects to the device asynchronously
         /// </summary>
         public async Task ConnectAsync()
         {
@@ -95,7 +100,7 @@ namespace NeuroSpectator.Services.BCI.Muse
                 }
 
                 // Update connection state
-                UpdateConnectionState(NeuroSpectator.Models.BCI.Common.ConnectionState.Connecting);
+                UpdateConnectionState(ConnectionState.Connecting);
 
                 // Notify connection manager if available
                 if (connectionManager != null)
@@ -141,6 +146,9 @@ namespace NeuroSpectator.Services.BCI.Muse
                     Debug.WriteLine($"Error checking connection state: {ex.Message}");
                 }
 
+                // Create a TaskCompletionSource to wait for successful configuration
+                var configurationReadyTcs = new TaskCompletionSource<bool>();
+
                 // Step 1: Clear all existing listeners
                 try
                 {
@@ -152,8 +160,25 @@ namespace NeuroSpectator.Services.BCI.Muse
                     Debug.WriteLine($"Error clearing listeners: {ex.Message}");
                 }
 
-                // Step 2: Register essential listeners
-                museDevice.RegisterConnectionListener(new MuseConnectionHandler(this));
+                // Step 2: Register essential listeners with the configuration ready handler
+                connectionHandler = new MuseConnectionHandler(this);
+                connectionHandler.ConfigurationReady += (s, e) => {
+                    Debug.WriteLine("Device ready for configuration access");
+                    configurationReadyTcs.TrySetResult(true);
+
+                    // Optional: Try to cache configuration here directly
+                    try
+                    {
+                        cachedConfiguration = museDevice.GetMuseConfiguration();
+                        Debug.WriteLine($"Successfully cached initial configuration");
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Initial configuration caching failed: {ex.Message}");
+                    }
+                };
+
+                museDevice.RegisterConnectionListener(connectionHandler);
                 museDevice.RegisterErrorListener(new MuseErrorHandler(this));
 
                 // Step 3: Set preset BEFORE connecting
@@ -182,7 +207,7 @@ namespace NeuroSpectator.Services.BCI.Muse
                 Debug.WriteLine($"Starting connection to Muse device: {deviceInfo.Name}");
                 try
                 {
-                    // CRITICAL CHANGE: Use RunAsynchronously instead of Connect
+                    // Use RunAsynchronously instead of Connect
                     museDevice.RunAsynchronously();
                     Debug.WriteLine("Connection started asynchronously");
                 }
@@ -193,12 +218,31 @@ namespace NeuroSpectator.Services.BCI.Muse
                 }
 
                 // Wait for connection with improved state checking
-                var success = await WaitForConnectionStateWithDirectCheck(NeuroSpectator.Models.BCI.Common.ConnectionState.Connected, TimeSpan.FromSeconds(30));
+                var connectTask = WaitForConnectionStateWithDirectCheck(ConnectionState.Connected, TimeSpan.FromSeconds(30));
+
+                // Create a timeout for configuration readiness
+                var configTimeoutTask = Task.Delay(TimeSpan.FromSeconds(15)).ContinueWith(_ => {
+                    configurationReadyTcs.TrySetResult(false);
+                    return false;
+                });
+
+                // Wait for connection to complete
+                var success = await connectTask;
 
                 if (success)
                 {
                     Debug.WriteLine($"Successfully connected to Muse device: {deviceInfo.Name}");
                     reconnectAttempts = 0;
+
+                    // Wait for either configuration to be ready or timeout
+                    // This doesn't introduce a hard delay, it only waits for the event or timeout
+                    var configTask = await Task.WhenAny(configurationReadyTcs.Task, configTimeoutTask);
+                    var configReady = await configTask;
+
+                    if (!configReady)
+                    {
+                        Debug.WriteLine("Warning: Device connected but configuration may not be ready");
+                    }
 
                     // Re-register for brain wave data if needed
                     if (registeredWaveTypes != BrainWaveTypes.None)
@@ -218,7 +262,7 @@ namespace NeuroSpectator.Services.BCI.Muse
                 else
                 {
                     Debug.WriteLine($"Failed to connect to Muse device: {deviceInfo.Name} (timeout)");
-                    UpdateConnectionState(NeuroSpectator.Models.BCI.Common.ConnectionState.Disconnected);
+                    UpdateConnectionState(ConnectionState.Disconnected);
 
                     if (connectionManager != null)
                     {
@@ -231,7 +275,7 @@ namespace NeuroSpectator.Services.BCI.Muse
             catch (Exception ex)
             {
                 Debug.WriteLine($"Error connecting to Muse device: {ex.Message}");
-                UpdateConnectionState(NeuroSpectator.Models.BCI.Common.ConnectionState.Disconnected);
+                UpdateConnectionState(ConnectionState.Disconnected);
 
                 if (connectionManager != null)
                 {
@@ -551,40 +595,43 @@ namespace NeuroSpectator.Services.BCI.Muse
 
             try
             {
-                // Check if museDevice is null
-                if (museDevice == null)
-                {
-                    Debug.WriteLine("GetBatteryLevelAsync: museDevice is null");
-                    return 0;
-                }
-
-                // Add detailed logging
                 Debug.WriteLine("GetBatteryLevelAsync: Attempting to get configuration");
 
-                // Get the configuration with try/catch
-                var config = museDevice.GetMuseConfiguration();
-
-                // Check if config is null
-                if (config == null)
+                // Use cached configuration if available
+                if (cachedConfiguration != null)
                 {
-                    Debug.WriteLine("GetBatteryLevelAsync: Configuration is null");
-                    return 0;
+                    double batteryLevel = Math.Clamp(cachedConfiguration.BatteryPercentRemaining, 0, 100);
+                    Debug.WriteLine($"Using cached battery level: {batteryLevel}%");
+                    return batteryLevel;
                 }
 
-                // Log the battery value
-                Debug.WriteLine($"GetBatteryLevelAsync: Battery level: {config.BatteryPercentRemaining}%");
+                // Try to get configuration (may fail)
+                try
+                {
+                    var config = museDevice.GetMuseConfiguration();
+                    cachedConfiguration = config; // Save for future use
+                    double batteryLevel = Math.Clamp(config.BatteryPercentRemaining, 0, 100);
+                    Debug.WriteLine($"Got battery level from configuration: {batteryLevel}%");
+                    return batteryLevel;
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Configuration access failed: {ex.Message}");
 
-                // Ensure the value is within reasonable bounds (0-100)
-                double batteryLevel = Math.Clamp(config.BatteryPercentRemaining, 0, 100);
-                return batteryLevel;
+                    // Return cached battery level if we have one
+                    if (cachedBatteryLevel >= 0)
+                    {
+                        Debug.WriteLine($"Using fallback cached battery level: {cachedBatteryLevel}%");
+                        return cachedBatteryLevel;
+                    }
+
+                    // No valid battery data available
+                    return 0;
+                }
             }
             catch (Exception ex)
             {
-                //Debug.WriteLine($"Error getting battery level: {ex.Message}");
-                Debug.WriteLine($"Stack trace: {ex.StackTrace}");
-                //ErrorOccurred?.Invoke(this, new BCIErrorEventArgs($"Error getting battery level: {ex.Message}", ex));
-
-                // Return a default value on error
+                Debug.WriteLine($"Error getting battery level: {ex.Message}");
                 return 0;
             }
         }
@@ -745,51 +792,24 @@ namespace NeuroSpectator.Services.BCI.Muse
         {
             try
             {
-                // If timestamp is a reasonable value, use it directly
-                // Unix timestamps are typically 13 digits for milliseconds
-                if (timestamp > 1000000000000 && timestamp < 10000000000000)
-                {
-                    return DateTimeOffset.FromUnixTimeMilliseconds(timestamp);
-                }
+                // Convert from microseconds to milliseconds
+                long milliseconds = timestamp / 1000;
 
-                // For excessively large timestamps, it might be a raw device timestamp
-                // Let's avoid logging each one to prevent console spam
-                if (timestamp > 10000000000000)
-                {
-                    // No debug message here to avoid spam
-                    // Try to convert from whatever format to a reasonable one
-                    // The conversion method depends on how the device reports time
-
-                    // Option 1: Might be in microseconds or nanoseconds
-                    long milliseconds;
-                    if (timestamp > 1000000000000000) // Likely nanoseconds (more than 16 digits)
-                        milliseconds = timestamp / 1000000;
-                    else // Likely microseconds (around 16 digits)
-                        milliseconds = timestamp / 1000;
-
-                    // Verify the result makes sense (roughly within last 10 years)
-                    long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    long tenYearsMs = 10L * 365 * 24 * 60 * 60 * 1000;
-
-                    if (Math.Abs(nowMs - milliseconds) < tenYearsMs)
-                        return DateTimeOffset.FromUnixTimeMilliseconds(milliseconds);
-                }
-
-                // Fallback - use current time without logging to avoid spam
-                return DateTimeOffset.Now;
+                // Create DateTimeOffset from milliseconds
+                return DateTimeOffset.FromUnixTimeMilliseconds(milliseconds);
             }
-            catch (ArgumentOutOfRangeException)
+            catch (ArgumentOutOfRangeException ex)
             {
-                if (errorCount < 3)
+                // Only log occasionally to avoid spamming the debug output
+                if (errorCount < 5)
                 {
-                    Debug.WriteLine($"Invalid timestamp value: {timestamp}, using current time instead");
+                    Debug.WriteLine($"Invalid timestamp: {timestamp}. Error: {ex.Message}");
                     errorCount++;
 
-                    if (errorCount == 3)
+                    if (errorCount == 5)
                         Debug.WriteLine("Suppressing further timestamp error messages...");
                 }
-
-                return DateTimeOffset.Now;
+                return DateTimeOffset.Now; // Fallback to current time
             }
         }
 
@@ -1192,6 +1212,9 @@ namespace NeuroSpectator.Services.BCI.Muse
         private class MuseConnectionHandler : IMuseConnectionListener
         {
             private readonly MuseDevice device;
+            private bool configurationReadyFired = false;
+
+            public event EventHandler ConfigurationReady;
 
             public MuseConnectionHandler(MuseDevice device)
             {
@@ -1202,39 +1225,60 @@ namespace NeuroSpectator.Services.BCI.Muse
             {
                 try
                 {
-                    // Map the Muse connection state to our connection state
-                    NeuroSpectator.Models.BCI.Common.ConnectionState newState;
-
-                    switch (packet.CurrentConnectionState)
-                    {
-                        case Core.ConnectionState.CONNECTED:
-                            newState = NeuroSpectator.Models.BCI.Common.ConnectionState.Connected;
-                            break;
-                        case Core.ConnectionState.CONNECTING:
-                            newState = NeuroSpectator.Models.BCI.Common.ConnectionState.Connecting;
-                            break;
-                        case Core.ConnectionState.DISCONNECTED:
-                            newState = NeuroSpectator.Models.BCI.Common.ConnectionState.Disconnected;
-                            break;
-                        case Core.ConnectionState.NEEDS_UPDATE:
-                            newState = NeuroSpectator.Models.BCI.Common.ConnectionState.NeedsUpdate;
-                            break;
-                        case Core.ConnectionState.NEEDS_LICENSE:
-                            newState = NeuroSpectator.Models.BCI.Common.ConnectionState.NeedsLicense;
-                            break;
-                        default:
-                            newState = NeuroSpectator.Models.BCI.Common.ConnectionState.Unknown;
-                            break;
-                    }
-
-                    // Update our state
+                    // Map the connection state and update device state
+                    ConnectionState newState = MapConnectionState(packet.CurrentConnectionState);
+                    Debug.WriteLine($"Connection transition: {packet.PreviousConnectionState} -> {packet.CurrentConnectionState}");
                     device.UpdateConnectionState(newState);
 
-                    // If state changed to disconnected, try to reconnect
-                    if (newState == NeuroSpectator.Models.BCI.Common.ConnectionState.Disconnected &&
+                    // If we're now connected, follow the C++ initialization sequence
+                    if (newState == ConnectionState.Connected && !configurationReadyFired)
+                    {
+                        configurationReadyFired = true;
+
+                        Task.Run(async () => {
+                            try
+                            {
+                                // Critical: Get version BEFORE getting configuration
+                                Debug.WriteLine("Fetching muse version...");
+                                var version = muse.GetMuseVersion();
+                                Debug.WriteLine($"Successfully got version: {version.FirmwareVersion}");
+                                device.firmwareVersion = version.FirmwareVersion;
+
+                                // Short delay to match C++ behavior (can be removed if it works without)
+                                await Task.Delay(200);
+
+                                // Now try to get configuration (might still fail)
+                                try
+                                {
+                                    Debug.WriteLine("Now fetching configuration...");
+                                    device.cachedConfiguration = muse.GetMuseConfiguration();
+                                    Debug.WriteLine("Successfully cached configuration");
+                                }
+                                catch (Exception configEx)
+                                {
+                                    Debug.WriteLine($"Configuration access failed: {configEx.Message}");
+                                    // Continue anyway - we at least have version information
+                                }
+
+                                // Signal that initialization sequence is complete
+                                ConfigurationReady?.Invoke(this, EventArgs.Empty);
+                            }
+                            catch (Exception ex)
+                            {
+                                Debug.WriteLine($"Error in connection initialization sequence: {ex.Message}");
+                                ConfigurationReady?.Invoke(this, EventArgs.Empty); // Still notify
+                            }
+                        });
+                    }
+                    else if (newState != ConnectionState.Connected)
+                    {
+                        configurationReadyFired = false;
+                    }
+
+                    // Handle reconnection logic if needed
+                    if (newState == ConnectionState.Disconnected &&
                         packet.PreviousConnectionState == Core.ConnectionState.CONNECTED)
                     {
-                        // Use Task.Run to avoid blocking the callback
                         Task.Run(() => device.TryReconnectAsync());
                     }
                 }
