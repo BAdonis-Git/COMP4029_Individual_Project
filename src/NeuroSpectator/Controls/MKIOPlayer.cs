@@ -27,7 +27,7 @@ namespace NeuroSpectator.Controls
         {
             webView = new WebView();
             webView.Navigated += WebView_Navigated;
-            // Instead of NavigationFailed, we'll handle errors in the Navigated event
+            // Handle errors in the Navigated event
 
             Content = webView;
         }

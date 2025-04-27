@@ -184,7 +184,7 @@ namespace NeuroSpectator.Services.Integration
 
 ## Basic Setup Steps
 
-1. **Install OBS WebSocket Plugin**
+1. **Install OBS WebSocket Plugin (If not installed by default)**
    - Download from: https://github.com/obsproject/obs-websocket/releases
    - Install and restart OBS Studio
    - Go to Tools → WebSockets Server Settings
@@ -208,7 +208,7 @@ namespace NeuroSpectator.Services.Integration
 4. **Connect NeuroSpectator to OBS**
    - In NeuroSpectator, go to the Stream Control page
    - Click 'Connect to OBS'
-   - Enter the WebSocket URL (usually ws://localhost:4444)
+   - Enter the WebSocket URL (usually ws://localhost:4455)
    - Enter the password if you set one
 
 5. **Start Streaming with Brain Data**
@@ -221,9 +221,7 @@ namespace NeuroSpectator.Services.Integration
 - If the brain data overlay isn't updating, try refreshing the browser source
 - Make sure the visualization server in NeuroSpectator is running
 - Check that OBS WebSocket is connected (green status in NeuroSpectator)
-- If OBS crashes, make sure you're using compatible versions
-
-For more help, visit the support section in NeuroSpectator.";
+- If OBS crashes, make sure you're using compatible versions";
         }
     }
 }
