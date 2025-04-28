@@ -196,7 +196,7 @@ namespace NeuroSpectator.PageModels
         }
 
         /// <summary>
-        /// Initialize when page appears
+        /// Initialise when page appears
         /// </summary>
         public async Task OnAppearingAsync()
         {
@@ -204,8 +204,7 @@ namespace NeuroSpectator.PageModels
             {
                 if (!IsInitialized)
                 {
-                    // In a real implementation, this would fetch mods from a service
-                    // For now, we're using placeholder data loaded in the constructor
+                    // Placeholder data loaded in the constructor
 
                     IsInitialized = true;
                 }

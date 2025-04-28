@@ -321,7 +321,7 @@ namespace NeuroSpectator.PageModels
                     return;
                 }
 
-                // Log that we're attempting to connect to the selected device
+                // Log attempt to connect to the selected device
                 Debug.WriteLine($"Attempting to connect to device: {SelectedDevice.Name} (ID: {SelectedDevice.DeviceId})");
 
                 StatusText = $"Connecting to {SelectedDevice.Name}...";
@@ -354,7 +354,7 @@ namespace NeuroSpectator.PageModels
                     device.ArtifactDetected += OnArtifactDetected;
                     device.ErrorOccurred += OnDeviceErrorOccurred;
 
-                    // Ensure we get all brain wave data
+                    // Ensure get all brain wave data
                     device.RegisterForBrainWaveData(BrainWaveTypes.All);
 
                     // Verify connection
@@ -431,7 +431,7 @@ namespace NeuroSpectator.PageModels
                         EegChannels = "4"
                     };
 
-                    // Now try to get the actual details - if this fails, we have defaults
+                    // Now try to get the actual details - if this fails, have defaults
                     try
                     {
                         var details = device.GetDeviceDetails();
@@ -476,7 +476,7 @@ namespace NeuroSpectator.PageModels
         {
             try
             {
-                // Check if we have a current device first
+                // Check if have a current device first
                 if (deviceManager.CurrentDevice == null)
                 {
                     return;
@@ -890,7 +890,7 @@ namespace NeuroSpectator.PageModels
                                         if (value > max) max = value;
                                     }
 
-                                    // Only use min/max if we found valid values
+                                    // Only use min/max if found valid values
                                     if (min != double.MaxValue && max != double.MinValue)
                                     {
                                         DataText = $"EEG: {e.BrainWaveData.ChannelCount} channels, range: {min:F1} to {max:F1}";

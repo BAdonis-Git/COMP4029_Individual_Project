@@ -79,8 +79,7 @@ public static class MauiProgram
 
             if (device == null)
             {
-                // Return a placeholder or throw an exception
-                // For now, we'll throw an exception to make errors more visible
+                // Throw an exception to make errors more visible
                 throw new InvalidOperationException("No BCI device available for BrainDataOBSHelper");
             }
 
@@ -152,8 +151,7 @@ public static class BCIDeviceManagerExtensions
             var deviceInfo = deviceManager.AvailableDevices[0];
             try
             {
-                // This is an async call, but we need a sync result
-                // Not ideal, but necessary for this specific use case
+                // Need sync result necessary for this specific use case
                 return deviceManager.ConnectToDeviceAsync(deviceInfo).GetAwaiter().GetResult();
             }
             catch

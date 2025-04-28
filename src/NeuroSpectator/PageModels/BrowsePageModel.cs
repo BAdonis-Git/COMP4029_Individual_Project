@@ -149,9 +149,6 @@ namespace NeuroSpectator.PageModels
             {
                 if (!IsInitialized)
                 {
-                    // In a real implementation, this would fetch streams from a service
-                    // For now, we're using placeholder data loaded in the constructor
-
                     IsInitialized = true;
                 }
             }
@@ -168,12 +165,10 @@ namespace NeuroSpectator.PageModels
         {
             try
             {
-                // In a real implementation, this would search for streams based on the search query
-                // For now, just log the search query
                 Debug.WriteLine($"Searching for streams with query: {SearchQuery}");
 
-                // Here you would filter the AvailableStreams collection based on the search query
-                // For now, just display a message
+                // Here filter the AvailableStreams collection based on the search query
+                // For now, displaying message
                 await Shell.Current.DisplayAlert("Search",
                     $"Searching for: {SearchQuery}",
                     "OK");
@@ -212,7 +207,6 @@ namespace NeuroSpectator.PageModels
             var stream = AvailableStreams.FirstOrDefault(s => s.Id == streamId);
             if (stream == null) return;
 
-            // In a real implementation, this would navigate to the stream viewer
             // For now, just show a placeholder alert
             await Shell.Current.DisplayAlert("Watch Stream",
                 $"Opening stream: {stream.Title} by {stream.StreamerName}\n" +

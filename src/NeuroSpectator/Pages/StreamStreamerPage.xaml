@@ -265,7 +265,7 @@
                           	HorizontalOptions="Center"/>
 
                         <!-- Default message when OBS is not connected -->
-                        <Label Text="OBS Studio must be running with the Browser Source configured to use the NeuroSpectator visualizations"
+                        <Label Text="OBS Studio must be running with the Browser Source configured to use the NeuroSpectator visualisations"
                	TextColor="#AAAAAA"
                	HorizontalOptions="Center"
                	VerticalOptions="Center"

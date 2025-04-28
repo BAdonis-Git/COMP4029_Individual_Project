@@ -588,7 +588,7 @@ namespace NeuroSpectator.PageModels
         /// </summary>
         private string ClassifyWaveLevel(double value)
         {
-            // These thresholds would need to be calibrated for your specific BCI device
+            // These thresholds would need to be calibrated for specific BCI device
             if (value < 30)
                 return "Low";
             else if (value < 60)
@@ -682,7 +682,7 @@ namespace NeuroSpectator.PageModels
                 // Refresh device status
                 await RefreshDeviceConnectionStatusAsync();
 
-                // If we're streaming and the device disconnects, end the stream
+                // If streaming and the device disconnects, end the stream
                 if (IsLive)
                 {
                     StatusMessage = "Device disconnected - ending stream";
@@ -1099,7 +1099,7 @@ namespace NeuroSpectator.PageModels
                 // Parse the RTMP URL
                 Uri uri = new Uri(rtmpUrl);
 
-                // Check if we can resolve the hostname
+                // Check if can resolve the hostname
                 var hostEntry = await Dns.GetHostEntryAsync(uri.Host);
 
                 // For RTMP need a more sophisticated check,
@@ -1107,7 +1107,7 @@ namespace NeuroSpectator.PageModels
                 Debug.WriteLine($"RTMP host {uri.Host} resolved successfully");
 
                 // To improve:
-                // 1. Send a request to our backend to check if the RTMP endpoint is accepting connections
+                // 1. Send a request to backend to check if the RTMP endpoint is accepting connections
                 // 2. Use a small test publishing to check if the endpoint accepts data
 
                 return true;
@@ -1157,7 +1157,7 @@ namespace NeuroSpectator.PageModels
                 // Create a new stream in MK.IO
                 try
                 {
-                    // MANDATORY FIRST STEP: Reset the streaming service - this is critical to success
+                    // Reset the streaming service - this is critical to success
                     StatusMessage = "Resetting streaming service...";
                     UpdateStartStreamButtonText("Resetting...");
 
@@ -1169,7 +1169,7 @@ namespace NeuroSpectator.PageModels
                     }
                     catch (Exception ex)
                     {
-                        // Log but continue - we'll try anyway
+                        // Log but continue
                         Debug.WriteLine($"Error resetting streaming service: {ex.Message}");
                     }
 
@@ -1187,7 +1187,7 @@ namespace NeuroSpectator.PageModels
                     // Update the UI with the stream information
                     if (stream != null)
                     {
-                        // Verify we have the necessary information
+                        // Verify have the necessary information
                         if (string.IsNullOrEmpty(stream.IngestUrl) || string.IsNullOrEmpty(stream.StreamKey))
                         {
                             StatusMessage = "Error: Missing stream URL or key";
@@ -1304,7 +1304,7 @@ namespace NeuroSpectator.PageModels
                             return;
                         }
 
-                        // Live event is now running - but we need to verify the RTMP endpoint is ready
+                        // Live event is now running - need to verify the RTMP endpoint is ready
                         StatusMessage = "Live event is active! Validating RTMP endpoint...";
                         UpdateStartStreamButtonText("Validating RTMP...");
 
@@ -1337,9 +1337,6 @@ namespace NeuroSpectator.PageModels
                                 try
                                 {
                                     isRtmpEndpointReady = await IsRtmpEndpointReadyAsync(stream.IngestUrl);
-
-                                    // Since we can't actually check the RTMP endpoint directly,
-                                    // we'll assume it's ready after the first retry
                                     isRtmpEndpointReady = true;
 
                                     if (isRtmpEndpointReady)
@@ -1390,7 +1387,6 @@ namespace NeuroSpectator.PageModels
                             {
                                 // OBS streaming failed to start
                                 StatusMessage = "Error starting OBS stream - please start it manually";
-                                // Don't set IsStartingStream to false yet - we'll still continue with the rest of the setup
                             }
                             else
                             {
@@ -1404,10 +1400,10 @@ namespace NeuroSpectator.PageModels
                             // Continue anyway - the MK.IO stream is running
                         }
 
-                        // Create the BrainDataOBSHelper now that we have a connected device
+                        // Create the BrainDataOBSHelper now device connected
                         try
                         {
-                            // We'll create this using the service provider to ensure all dependencies are properly resolved
+                            // Create this using the service provider to ensure all dependencies are properly resolved
                             brainDataObsHelper = MauiProgram.Services.GetService<BrainDataOBSHelper>();
 
                             if (brainDataObsHelper != null)

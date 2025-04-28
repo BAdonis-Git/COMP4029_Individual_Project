@@ -567,7 +567,7 @@ namespace NeuroSpectator.Services.Streaming
         {
             try
             {
-                // Ensure we're working with a value between 0 and 1
+                // Ensure working with a value between 0 and 1
                 activityLevel = Math.Clamp(activityLevel, 0.0, 1.0);
 
                 // Get the current filter settings
@@ -621,7 +621,7 @@ namespace NeuroSpectator.Services.Streaming
         }
 
         /// <summary>
-        /// Synchronizes the brain data with OBS by updating the browser source
+        /// Synchronises the brain data with OBS by updating the browser source
         /// </summary>
         public async Task SyncBrainDataWithOBSAsync(Dictionary<string, string> brainMetrics)
         {
@@ -629,10 +629,10 @@ namespace NeuroSpectator.Services.Streaming
             {
                 if (visualizationService != null && IsConnected)
                 {
-                    // Update the visualization data
+                    // Update the visualisation data
                     await visualizationService.UpdateBrainMetricsAsync(brainMetrics);
 
-                    // If we have a browser source, update it to show the latest data
+                    // If have a browser source, update it to show the latest data
                     if (!string.IsNullOrEmpty(brainDataBrowserSourceName) && !string.IsNullOrEmpty(currentScene))
                     {
                         // Get the visualization URL
@@ -641,7 +641,7 @@ namespace NeuroSpectator.Services.Streaming
                         // Force the browser source to refresh
                         await UpdateBrowserSourceAsync(brainDataBrowserSourceName, url);
 
-                        // If we have a focus metric, use it to update a highlight filter if it exists
+                        // If have a focus metric, use it to update a highlight filter if it exists
                         if (brainMetrics.TryGetValue("Focus", out string focusValue))
                         {
                             double focusLevel = 0;

@@ -337,7 +337,7 @@ namespace NeuroSpectator.Services.Integration
         /// </summary>
         private string ClassifyWaveLevel(double value)
         {
-            // These thresholds would need to be calibrated for your specific BCI device
+            // These thresholds would need to be calibrated for specific BCI device
             if (value < 30)
                 return "Low";
             else if (value < 60)

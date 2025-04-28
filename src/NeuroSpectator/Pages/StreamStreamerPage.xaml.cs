@@ -69,8 +69,8 @@ namespace NeuroSpectator.Pages
             if (_viewModel != null)
             {
                 // Call the confirmation method in the view model
-                _viewModel.ConfirmExitAsync.Execute(null);  // Changed from ConfirmExitAsync() to ConfirmExitAsync.Execute(null)
-                return true; // We're handling the back button
+                _viewModel.ConfirmExitAsync.Execute(null);
+                return true; // Handling the back button
             }
             return base.OnBackButtonPressed();
         }

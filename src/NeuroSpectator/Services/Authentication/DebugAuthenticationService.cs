@@ -42,7 +42,7 @@ namespace NeuroSpectator.Services.Authentication
 
             isSignedIn = true;
 
-            // Return null since we're not actually authenticating
+
             // The actual AccountService will handle this
             return null;
         }

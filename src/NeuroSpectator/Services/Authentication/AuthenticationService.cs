@@ -11,7 +11,6 @@ namespace NeuroSpectator.Services.Authentication
         private readonly IPublicClientApplication msalClient;
         private readonly string[] scopes = { "User.Read" };
 
-        // This should be replaced with your actual Azure AD application client ID
         private readonly string clientId = "8148bc5a-c57b-491a-97fd-30ae8e61f960";
         private string redirectUri;
 
@@ -55,7 +54,7 @@ namespace NeuroSpectator.Services.Authentication
                 var accounts = await msalClient.GetAccountsAsync();
                 if (accounts.Any())
                 {
-                    // Try silent authentication if we have accounts
+                    // Try silent authentication if have accounts
                     return await msalClient.AcquireTokenSilent(scopes, accounts.FirstOrDefault())
                         .ExecuteAsync();
                 }

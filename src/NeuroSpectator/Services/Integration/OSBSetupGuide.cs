@@ -79,7 +79,7 @@ namespace NeuroSpectator.Services.Integration
                 if (!scenes.Contains(sceneName))
                 {
                     // Create scene method isn't directly exposed in OBSIntegrationService,
-                    // but we can add it or use this workaround
+                    // but can use this workaround
                     await obsService.SwitchSceneAsync(sceneName);
                 }
             }
@@ -98,8 +98,6 @@ namespace NeuroSpectator.Services.Integration
             try
             {
                 // This would add a game capture source and position brain data overlay
-                // The specifics depend on your OBS integration capabilities
-                // For this example, we'll just position the brain data overlay
                 await obsService.SwitchSceneAsync(sceneName);
 
                 // Create or update the brain data source
@@ -111,7 +109,6 @@ namespace NeuroSpectator.Services.Integration
                     600); // height
 
                 // Position the source (requires implementation in OBSIntegrationService)
-                // This would use SetSceneItemTransform in a real implementation
             }
             catch (Exception ex)
             {
@@ -162,7 +159,7 @@ namespace NeuroSpectator.Services.Integration
 
             // Create a text source for "Be Right Back"
             // This would require CreateInput implementation in OBSIntegrationService
-            // For now, we'll just add the brain data overlay
+            // For now, add the brain data overlay
             await obsService.CreateOrUpdateBrainDataSourceAsync(
                 sceneName,
                 visualizationService.VisualisationUrl + "/brain_data.html",

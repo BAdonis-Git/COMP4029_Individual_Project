@@ -331,7 +331,7 @@ namespace NeuroSpectator.PageModels
                 OnPropertyChanged(nameof(IsNotConnected));
                 OnPropertyChanged(nameof(HasConnectedDevice));
 
-                // If newly connected and we have a connection manager, register the device
+                // If newly connected and have a connection manager, register the device
                 if (IsConnected && connectionManager != null && sender is IBCIDevice device)
                 {
                     connectionManager.RegisterDevice(device);

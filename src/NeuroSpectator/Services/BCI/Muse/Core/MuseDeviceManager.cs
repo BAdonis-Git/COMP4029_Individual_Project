@@ -129,7 +129,7 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
             await semaphore.WaitAsync();
             try
             {
-                // Stop scanning while we connect to a device
+                // Stop scanning while connect to a device
                 if (isScanning)
                 {
                     Console.WriteLine("Stopping scanning before connecting to device");
@@ -377,8 +377,8 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
         /// </summary>
         private async void TryReconnectToLastDeviceIfNeeded()
         {
-            // If we have no current device but there are available devices,
-            // and we have a previously connected device ID saved, try to reconnect
+            // If have no current device but there are available devices,
+            // and have a previously connected device ID saved, try to reconnect
             if (CurrentDevice == null && AvailableDevices.Count > 0)
             {
                 string lastDeviceId = await GetLastConnectedDeviceIdAsync();
@@ -411,7 +411,7 @@ namespace NeuroSpectator.Services.BCI.Muse.Core
         private async Task<string> GetLastConnectedDeviceIdAsync()
         {
             // This would typically load from app settings or preferences
-            // For now, we'll just return null
+            // For now, just return null
             return null;
         }
 

@@ -1,7 +1,7 @@
 ﻿using NeuroSpectator.Services.BCI.Muse.Interop;
 using System.Runtime.InteropServices;
 
-// Define a minimal AOT namespace to support MonoPInvokeCallback
+// Define a minimal AOT namespace to support MonoPInvokeCallback from Unity Conversion
 namespace AOT
 {
     [AttributeUsage(AttributeTargets.Method)]

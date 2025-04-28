@@ -244,7 +244,7 @@ namespace NeuroSpectator.Services.BCI.Muse.Platform
                 return false;
             }
 #else
-            // For other platforms, we'll assume Bluetooth is enabled
+            // For other platforms, assume Bluetooth is enabled
             return true;
 #endif
         }

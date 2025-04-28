@@ -98,7 +98,7 @@ namespace NeuroSpectator.Pages
             if (_viewModel != null)
             {
                 _viewModel.CloseStreamCommand.Execute(null);
-                return true; // We're handling the back button
+                return true; // Handling the back button
             }
             return base.OnBackButtonPressed();
         }

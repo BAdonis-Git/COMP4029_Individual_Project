@@ -52,7 +52,7 @@ namespace NeuroSpectator.Controls
         }
 
         /// <summary>
-        /// Initializes the player with a stream ID
+        /// Initialises the player with a stream ID
         /// </summary>
         public async Task InitializePlayerAsync(string streamId, bool isLive = true)
         {
@@ -84,7 +84,7 @@ namespace NeuroSpectator.Controls
         }
 
         /// <summary>
-        /// Initializes the player with a direct stream URL
+        /// Initialises the player with a direct stream URL
         /// </summary>
         public async Task InitializeWithUrlAsync(string streamUrl, bool isLive = true)
         {
@@ -250,9 +250,7 @@ namespace NeuroSpectator.Controls
                 player.style.backgroundColor = '#000';
                 player.playsInline = true;
                 
-                // Set the source - would be replaced with actual stream URL in production
-                // This is just a placeholder - real implementation would use MK.IO SDK URLs
-                player.src = '{streamId}'; // This should be replaced with actual URL in production
+                player.src = '{streamId}';
                 
                 // Add to container
                 var container = document.getElementById('player-container');

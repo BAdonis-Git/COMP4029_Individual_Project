@@ -171,7 +171,7 @@ namespace NeuroSpectator.Services.BCI
             device.ConnectionStateChanged += OnDeviceConnectionStateChanged;
             device.ErrorOccurred += OnDeviceErrorOccurred;
 
-            // If the device is already connected, add it to our list
+            // If the device is already connected, add it to list
             if (device.IsConnected && !connectedDevices.ContainsKey(device.DeviceId))
             {
                 connectedDevices[device.DeviceId] = device;
@@ -195,7 +195,7 @@ namespace NeuroSpectator.Services.BCI
             device.ConnectionStateChanged -= OnDeviceConnectionStateChanged;
             device.ErrorOccurred -= OnDeviceErrorOccurred;
 
-            // Remove from our list if connected
+            // Remove from list if connected
             if (connectedDevices.ContainsKey(device.DeviceId))
             {
                 connectedDevices.Remove(device.DeviceId);

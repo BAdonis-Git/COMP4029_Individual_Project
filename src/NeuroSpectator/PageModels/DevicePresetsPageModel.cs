@@ -143,8 +143,7 @@ namespace NeuroSpectator.PageModels
             {
                 if (deviceManager.CurrentDevice != null && deviceManager.CurrentDevice.IsConnected)
                 {
-                    // In a real implementation, we would apply these settings to the device
-                    // For now, just save them
+                    // Should apply these settings to the device, just save them currently
                     var settings = new Services.DeviceSettingsModel
                     {
                         Name = DeviceName,

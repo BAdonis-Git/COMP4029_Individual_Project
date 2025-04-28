@@ -9,7 +9,7 @@ namespace NeuroSpectator
         {
             InitializeComponent();
 
-            // Use this approach instead of direct instantiation
+            // Use instead of direct instantiation
             if (MauiProgram.Services != null)
             {
                 var loginPage = MauiProgram.Services.GetService<LoginPage>();

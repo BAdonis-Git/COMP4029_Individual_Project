@@ -75,7 +75,7 @@ namespace NeuroSpectator.Services.Streaming
             this.accountService = accountService ?? throw new ArgumentNullException(nameof(accountService));
             this.connectivity = connectivity ?? throw new ArgumentNullException(nameof(connectivity));
 
-            // Ensure we have valid configuration
+            // Ensure have valid configuration
             if (!mkioConfig.IsValid)
             {
                 throw new InvalidOperationException("MK.IO configuration is invalid. Check MKIOSubscriptionName, MKIOToken, and StorageName settings.");
@@ -107,7 +107,7 @@ namespace NeuroSpectator.Services.Streaming
                     throw new InvalidOperationException("User must be signed in to create a stream");
                 }
 
-                // First ensure we're in a clean state
+                // First ensure in a clean state
                 Debug.WriteLine("CreateStreamAsync: Ensuring clean state before creating stream");
                 await ResetStatusAsync();
 
@@ -125,9 +125,8 @@ namespace NeuroSpectator.Services.Streaming
                 // Create a unique ID for this stream
                 string streamerId = currentUser.UserId ?? "anonymous";
 
-                // CRITICAL FIX: Do NOT set status to Starting here - leave it as Idle
+                // Do not set status to Starting here - leave it as Idle
                 // Let StartStreamingAsync handle the state transition
-                // This was causing the "Stream is already starting" error
 
                 // Create a live event in MK.IO
                 currentLiveEventName = mkioConfig.GenerateLiveEventName(streamerId);
@@ -202,10 +201,10 @@ namespace NeuroSpectator.Services.Streaming
 
                 Debug.WriteLine($"CreateStreamAsync: Streaming locator {currentLocatorName} created successfully");
 
-                // Wait a moment for the locator to be fully created before trying to get the URLs
+                // Wait for the locator to be fully created before trying to get the URLs
                 await Task.Delay(3000);
 
-                // Ensure we have a streaming endpoint
+                // Ensure a streaming endpoint
                 await EnsureStreamingEndpointAvailableAsync();
 
                 // Create a StreamInfo object to represent this stream
@@ -233,10 +232,9 @@ namespace NeuroSpectator.Services.Streaming
                 Debug.WriteLine($"CreateStreamAsync: Stream object created with ID {currentStream.Id}");
 
                 // Set the playback URL based on the streaming locator
-                // This might fail, but we're handling that in the method
                 await UpdatePlaybackUrlAsync();
 
-                // Ensure we're still in Idle state before returning
+                // Ensure Idle state before returning
                 Debug.WriteLine("CreateStreamAsync: Ensuring Idle state before returning");
                 Status = StreamingStatus.Idle;
 
@@ -282,8 +280,8 @@ namespace NeuroSpectator.Services.Streaming
                 if (tags != null)
                     currentStream.Tags = tags;
 
-                // Note: In MK.IO, we can't directly update the live event properties after creation
-                // So we just update our local StreamInfo object
+                // Note: In MK.IO, can't directly update the live event properties after creation
+                // So update our local StreamInfo object
 
                 return currentStream;
             }
@@ -307,10 +305,7 @@ namespace NeuroSpectator.Services.Streaming
 
             try
             {
-                // This is where the issue is - we need to make sure status is properly reset
-                // and check it more carefully
-
-                // First, check if we're already in the streaming or starting state
+                // First, check if already in the streaming or starting state
                 if (Status == StreamingStatus.Streaming)
                 {
                     throw new InvalidOperationException("A stream is already in progress");
@@ -318,8 +313,6 @@ namespace NeuroSpectator.Services.Streaming
 
                 if (Status == StreamingStatus.Starting)
                 {
-                    // If we're already in Starting state but it's for a different stream,
-                    // we should reset first
                     if (currentStream?.Id != streamId)
                     {
                         Debug.WriteLine($"StartStreamingAsync: Already in Starting state but for a different stream. Resetting first.");
@@ -336,8 +329,6 @@ namespace NeuroSpectator.Services.Streaming
                 }
 
                 Debug.WriteLine($"StartStreamingAsync: Starting stream {streamId}");
-
-                // Now we can update status to Starting
                 Status = StreamingStatus.Starting;
 
                 // Check if this is the current stream
@@ -356,7 +347,6 @@ namespace NeuroSpectator.Services.Streaming
                 }
                 catch (Exception ex)
                 {
-                    // If we get an error about the stream already running, this is actually okay
                     if (ex.Message.Contains("already running") || ex.Message.Contains("already started"))
                     {
                         Debug.WriteLine("StartStreamingAsync: Live event appears to be already running - continuing");
@@ -583,7 +573,7 @@ namespace NeuroSpectator.Services.Streaming
 
                 foreach (var liveEvent in liveEvents)
                 {
-                    // Skip events that aren't running if we only want live streams
+                    // Skip events that aren't running if only want live streams
                     if (includeLiveOnly && liveEvent.Properties.ResourceState != LiveEventResourceState.Running)
                     {
                         continue;
@@ -639,7 +629,7 @@ namespace NeuroSpectator.Services.Streaming
                             {
                                 var locator = assetLocators.First();
 
-                                // Now we have the locator name, we can get the streaming URLs
+                                // Now have the locator name, we can get the streaming URLs
                                 await SetStreamPlaybackUrlAsync(asset.Name, locator.Name, stream);
                             }
 
@@ -863,7 +853,7 @@ namespace NeuroSpectator.Services.Streaming
                     {
                         var locator = assetLocators.First();
 
-                        // Now we have the locator name, we can get the streaming URLs
+                        // Now have the locator name, can get the streaming URLs
                         await SetStreamPlaybackUrlAsync(asset.Name, locator.Name, stream);
                     }
 
@@ -931,12 +921,7 @@ namespace NeuroSpectator.Services.Streaming
 
             try
             {
-                // Currently, MK.IO doesn't directly support thumbnail uploads via API
-                // In a real implementation, we would:
-                // 1. Upload the thumbnail to blob storage
-                // 2. Update the asset metadata with the thumbnail URL
-
-                // For now, we'll just update the current stream's thumbnail URL if this is the current stream
+                // Update the current stream's thumbnail URL if this is the current stream
                 if (currentStream != null && currentStream.Id == streamId)
                 {
                     // Simulate a thumbnail URL
@@ -1295,10 +1280,7 @@ namespace NeuroSpectator.Services.Streaming
 
             try
             {
-                // Currently, MK.IO doesn't provide real-time streaming statistics via API
-                // In a real implementation, we would get stats from the streaming endpoint
-
-                // For now, we'll simulate statistics
+                // For now, simulate statistics
                 var random = new Random();
 
                 // Create statistics object

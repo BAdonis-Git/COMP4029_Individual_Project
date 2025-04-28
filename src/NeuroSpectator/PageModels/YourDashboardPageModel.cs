@@ -550,7 +550,7 @@ namespace NeuroSpectator.PageModels
         {
             try
             {
-                // Check if we have a current device first
+                // Check if have a current device first
                 if (deviceManager.CurrentDevice == null)
                 {
                     Debug.WriteLine("Dashboard: Cannot start battery monitoring - no current device");
@@ -634,9 +634,6 @@ namespace NeuroSpectator.PageModels
         private async Task ViewStreamAsync(FeaturedStreamModel stream)
         {
             if (stream == null) return;
-
-            // In a real implementation, you would pass stream ID to the stream viewer page
-            // For now, just show a placeholder alert
             await Shell.Current.DisplayAlert("Stream Selected",
                 $"Opening stream: {stream.Title} by {stream.StreamerName}",
                 "OK");
@@ -649,7 +646,7 @@ namespace NeuroSpectator.PageModels
         {
             if (category == null) return;
 
-            // In a real implementation, you would navigate to Browse page with category filter
+            // In a real implementation, navigate to Browse page with category filter
             // For now, just show a placeholder alert
             await Shell.Current.DisplayAlert("Category Selected",
                 $"Viewing category: {category.Name}",
@@ -661,7 +658,6 @@ namespace NeuroSpectator.PageModels
         /// </summary>
         private void OnDeviceListChanged(object sender, System.Collections.Generic.List<IBCIDeviceInfo> devices)
         {
-            // This is more relevant for the YourDevicesPage, but we might want to update UI elements
             // if a new device is detected while on the dashboard
             Debug.WriteLine($"Dashboard: Device list changed - {devices.Count} devices available");
         }

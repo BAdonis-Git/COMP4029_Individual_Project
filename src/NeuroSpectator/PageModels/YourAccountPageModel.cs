@@ -143,7 +143,7 @@ namespace NeuroSpectator.PageModels
 
                 if (result)
                 {
-                    // Here we would delete the user's data from storage
+                    // Here delete the user's data from storage
                     // Then sign them out
                     await accountService.SignOutAsync();
                     await Shell.Current.GoToAsync("//LoginPage");
