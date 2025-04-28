@@ -1,6 +1,7 @@
 ﻿using NeuroSpectator.Services.BCI.Muse.Interop;
 using System.Runtime.InteropServices;
 
+// NOTE: THIS CODE IS LAREGELY ADAPTED FROM THE LIBMUSE C++ API UNITY WRAPPER
 // Define a minimal AOT namespace to support MonoPInvokeCallback from Unity Conversion
 namespace AOT
 {

@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 
 namespace NeuroSpectator.Services.BCI.Muse.Interop
 {
-
+    // NOTE: THIS CODE IS LAREGELY ADAPTED FROM THE LIBMUSE C++ API UNITY WRAPPER
     internal delegate void ApiCallback(string jsonArgs);
     internal delegate void DataCallback(MuseDataPacketType packetType, nint valuesBuf, int numValues, long timestamp, string macAddress);
 
